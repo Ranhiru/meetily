@@ -1074,6 +1074,29 @@ pub async fn open_meeting_folder<R: Runtime>(
     }
 }
 
+/// Container formats the webview's audio element can decode.
+///
+/// Deliberately separate from AUDIO_EXTENSIONS and FFMPEG_ONLY_EXTENSIONS, which answer
+/// whether the backend can decode a file for transcription. That is a different question
+/// from whether the webview can play it, and the two lists do not agree.
+const WEBVIEW_PLAYABLE: &[&str] = &["mp4", "m4a", "aac", "mp3", "wav", "flac"];
+
+/// WebView2 and WebKitGTK decode these; WKWebView does not.
+#[cfg(not(target_os = "macos"))]
+const WEBVIEW_PLAYABLE_EXTRA: &[&str] = &["ogg", "webm"];
+#[cfg(target_os = "macos")]
+const WEBVIEW_PLAYABLE_EXTRA: &[&str] = &[];
+
+fn is_webview_playable(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|ext| {
+            let ext = ext.to_lowercase();
+            WEBVIEW_PLAYABLE.contains(&ext.as_str()) || WEBVIEW_PLAYABLE_EXTRA.contains(&ext.as_str())
+        })
+        .unwrap_or(false)
+}
+
 /// Why the meeting's recording audio is unavailable for in-app playback
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -1082,6 +1105,8 @@ pub enum AudioUnavailableReason {
     NoFolderRecorded,
     FolderMissing,
     NoAudioInFolder,
+    /// Found, but in a container the webview cannot decode. Carries the extension.
+    UnsupportedFormat(String),
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -1144,6 +1169,18 @@ pub async fn get_meeting_audio_path<R: Runtime>(
         log_warn!("No audio file found in folder: {}", folder_path);
         return Ok(MeetingAudio::unavailable(AudioUnavailableReason::NoAudioInFolder));
     };
+
+    if !is_webview_playable(&audio_path) {
+        let ext = audio_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("unknown")
+            .to_lowercase();
+        log_warn!("Audio file is not playable in the webview: {}", audio_path.display());
+        return Ok(MeetingAudio::unavailable(
+            AudioUnavailableReason::UnsupportedFormat(ext),
+        ));
+    }
 
     app.asset_protocol_scope()
         .allow_file(&audio_path)

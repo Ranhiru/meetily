@@ -11,12 +11,17 @@ import { invoke } from '@tauri-apps/api/core';
 import { toast } from 'sonner';
 import { motion, AnimatePresence } from 'framer-motion';
 
-/** Mirrors the `MeetingAudio` payload returned by the `get_meeting_audio_path` command */
+/**
+ * Mirrors the `MeetingAudio` payload returned by the `get_meeting_audio_path` command.
+ * Unit variants serialise as plain strings; `UnsupportedFormat` carries the extension, so
+ * serde emits it as an externally tagged object.
+ */
 type AudioUnavailableReason =
   | 'meeting_not_found'
   | 'no_folder_recorded'
   | 'folder_missing'
-  | 'no_audio_in_folder';
+  | 'no_audio_in_folder'
+  | { unsupported_format: string };
 
 interface MeetingAudio {
   path: string | null;
@@ -24,6 +29,10 @@ interface MeetingAudio {
 }
 
 function describeUnavailableAudio(reason: AudioUnavailableReason | null): string {
+  if (reason && typeof reason === 'object' && 'unsupported_format' in reason) {
+    return `This recording is a .${reason.unsupported_format} file, which cannot be played in the app.`;
+  }
+
   switch (reason) {
     case 'no_folder_recorded':
       return 'This meeting has no recording folder.';
