@@ -19,7 +19,6 @@ export interface AudioPlayerControls {
   play: () => Promise<void>;
   pause: () => void;
   togglePlay: () => Promise<void>;
-  stop: () => void;
   seek: (timeInSeconds: number) => void;
   skip: (seconds: number) => void;
   setPlaybackRate: (rate: PlaybackRate) => void;
@@ -41,7 +40,6 @@ export const useAudioPlayer = (audioPath: string | null): UseAudioPlayerReturn =
   const [error, setError] = useState<string | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const playPromiseRef = useRef<Promise<void> | null>(null);
   const pendingSeekRef = useRef<number | null>(null);
 
   // Initialize or update audio source when audioPath changes
@@ -185,8 +183,7 @@ export const useAudioPlayer = (audioPath: string | null): UseAudioPlayerReturn =
     try {
       setError(null);
       audio.playbackRate = playbackRate;
-      playPromiseRef.current = audio.play();
-      await playPromiseRef.current;
+      await audio.play();
       setIsPlaying(true);
     } catch (err: any) {
       // AbortError is common when play() is immediately followed by pause()
@@ -195,8 +192,6 @@ export const useAudioPlayer = (audioPath: string | null): UseAudioPlayerReturn =
         setError('Failed to play audio');
       }
       setIsPlaying(false);
-    } finally {
-      playPromiseRef.current = null;
     }
   }, [playbackRate]);
 
@@ -219,20 +214,6 @@ export const useAudioPlayer = (audioPath: string | null): UseAudioPlayerReturn =
       await play();
     }
   }, [isPlaying, play, pause]);
-
-  const stop = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-
-    try {
-      audio.pause();
-      audio.currentTime = 0;
-      setCurrentTime(0);
-      setIsPlaying(false);
-    } catch (err) {
-      console.error('Error stopping audio:', err);
-    }
-  }, []);
 
   const seek = useCallback((timeInSeconds: number) => {
     const audio = audioRef.current;
@@ -305,7 +286,6 @@ export const useAudioPlayer = (audioPath: string | null): UseAudioPlayerReturn =
     play,
     pause,
     togglePlay,
-    stop,
     seek,
     skip,
     setPlaybackRate,
