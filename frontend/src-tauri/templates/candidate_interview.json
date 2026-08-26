@@ -1,0 +1,56 @@
+{
+  "name": "Candidate Interview",
+  "description": "Structured interview notes capturing what the candidate demonstrated, with evidence from the transcript.",
+  "sections": [
+    {
+      "title": "Interview Metadata",
+      "instruction": "Emit each field on its own line using exactly the labels shown. Fill a field only when the transcript states it about this interview, and write 'Not stated' otherwise. Never infer a value from an incidental remark",
+      "format": "list",
+      "item_format": "- **Role:** <role the candidate is interviewing for>\n- **Stage:** <interview stage, such as screening, technical, or final>"
+    },
+    {
+      "title": "Participants",
+      "instruction": "The candidate and each interviewer, with their role where it is stated",
+      "format": "list"
+    },
+    {
+      "title": "Candidate Background",
+      "instruction": "Summarise the experience, projects, and skills the candidate described about themselves. Report only what they actually said; do not infer seniority or fill gaps",
+      "format": "paragraph"
+    },
+    {
+      "title": "Topics Assessed",
+      "instruction": "One row per topic or competency the interview covered. Summarise the candidate's answer and quote or reference the transcript it came from, so every assessment can be traced back to what was said",
+      "format": "list",
+      "item_format": "| **Topic** | **Candidate's Response** | **Reference Transcript Segment** | **Segment Time stamp** |\n| --- | --- | --- | --- |"
+    },
+    {
+      "title": "Strengths Demonstrated",
+      "instruction": "Job-relevant strengths the candidate evidenced during the interview, each tied to the specific answer or example that showed it",
+      "format": "list",
+      "item_format": "| **Strength** | **Evidence from Interview** |\n| --- | --- |"
+    },
+    {
+      "title": "Gaps & Follow-Ups",
+      "instruction": "Job-relevant areas that were weak, unclear, or left unexplored, and what a later stage should probe. Record open questions rather than conclusions",
+      "format": "list",
+      "item_format": "| **Area** | **What Was Missing** | **Follow-Up** |\n| --- | --- | --- |"
+    },
+    {
+      "title": "Candidate's Questions",
+      "instruction": "Questions the candidate asked about the role, team, or company, and how they were answered",
+      "format": "list"
+    },
+    {
+      "title": "Interviewer Assessment",
+      "instruction": "Summarise the assessment the interviewers actually voiced, attributed to whoever said it. If no view was expressed, say so rather than forming one",
+      "format": "paragraph"
+    },
+    {
+      "title": "Next Steps",
+      "instruction": "Agreed follow-up actions with owners and timing, including anything promised to the candidate",
+      "format": "list",
+      "item_format": "| **Owner** | **Action** | **Due Date** |\n| --- | --- | --- |"
+    }
+  ]
+}
