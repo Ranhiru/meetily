@@ -102,58 +102,60 @@ const TranscriptSegment = memo(function TranscriptSegment({
     return (
         <div id={`segment-${id}`} className="mb-2">
             <div
-                className={`flex items-start gap-2.5 p-2 rounded-lg transition-all ${
+                className={`p-2 rounded-lg transition-all ${
                     isActive
                         ? 'bg-blue-50 border border-blue-300 shadow-sm ring-1 ring-blue-200'
                         : ''
                 }`}
             >
-                <Tooltip>
-                    <TooltipTrigger asChild>
-                        {/* Only the badge seeks, so selecting the transcript text never starts playback */}
-                        <span
-                            onClick={seek}
-                            onKeyDown={seek && ((e) => {
-                                if (e.key === 'Enter' || e.key === ' ') {
-                                    e.preventDefault();
-                                    seek();
-                                }
-                            })}
-                            role={seek ? 'button' : undefined}
-                            tabIndex={seek ? 0 : undefined}
-                            title={seek ? `Play from ${formatRecordingTime(timestamp)}` : undefined}
-                            className={`text-xs mt-0.5 flex-shrink-0 min-w-[50px] font-mono select-none transition-colors rounded ${
-                                isActive
-                                    ? 'text-blue-600 font-bold'
-                                    : 'text-gray-400 group-hover:text-gray-600'
-                            } ${
-                                seek
-                                    ? 'cursor-pointer hover:text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400'
-                                    : ''
-                            }`}
-                        >
-                            {formatRecordingTime(timestamp)}
-                        </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        {seek ? (
-                            <span className="text-xs">Play from {formatRecordingTime(timestamp)}</span>
-                        ) : confidence !== undefined && showConfidence ? (
-                            <ConfidenceIndicator confidence={confidence} showIndicator={showConfidence} />
-                        ) : null}
-                    </TooltipContent>
-                </Tooltip>
-                <div className="flex-1">
-                    {isStreaming ? (
-                        <div className="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
-                            <p className="text-base text-gray-800 leading-relaxed">{displayText}</p>
-                        </div>
-                    ) : (
-                        <p className={`text-base leading-relaxed ${isActive ? 'text-blue-950 font-medium' : 'text-gray-800'}`}>
-                            {displayText}
-                        </p>
-                    )}
+                {/* Stacked above the text so the transcript gets the full column width */}
+                <div className="mb-0.5">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            {/* Only the badge seeks, so selecting the transcript text never starts playback */}
+                            <span
+                                onClick={seek}
+                                onKeyDown={seek && ((e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        seek();
+                                    }
+                                })}
+                                role={seek ? 'button' : undefined}
+                                tabIndex={seek ? 0 : undefined}
+                                title={seek ? `Play from ${formatRecordingTime(timestamp)}` : undefined}
+                                className={`inline-block text-xs font-mono select-none transition-colors rounded ${
+                                    isActive
+                                        ? 'text-blue-600 font-bold'
+                                        : 'text-gray-400'
+                                } ${
+                                    seek
+                                        ? 'cursor-pointer hover:text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400'
+                                        : ''
+                                }`}
+                            >
+                                {formatRecordingTime(timestamp)}
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            {seek ? (
+                                <span className="text-xs">Play from {formatRecordingTime(timestamp)}</span>
+                            ) : confidence !== undefined && showConfidence ? (
+                                <ConfidenceIndicator confidence={confidence} showIndicator={showConfidence} />
+                            ) : null}
+                        </TooltipContent>
+                    </Tooltip>
                 </div>
+
+                {isStreaming ? (
+                    <div className="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
+                        <p className="text-base text-gray-800 leading-relaxed">{displayText}</p>
+                    </div>
+                ) : (
+                    <p className={`text-base leading-relaxed ${isActive ? 'text-blue-950 font-medium' : 'text-gray-800'}`}>
+                        {displayText}
+                    </p>
+                )}
             </div>
         </div>
     );

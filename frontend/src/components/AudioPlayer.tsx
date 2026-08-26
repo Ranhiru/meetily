@@ -4,7 +4,6 @@ import React, { useState, useRef } from 'react';
 import {
   Play,
   Pause,
-  Square,
   RotateCcw,
   RotateCw,
   Volume2,
@@ -273,22 +272,6 @@ export function AudioPlayer({
       <div className="flex items-center justify-between gap-1 pt-1">
         {/* Left: Playback Controls */}
         <div className="flex items-center gap-1.5">
-          {/* Stop Button */}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={player.stop}
-                disabled={!hasAudio}
-                className="h-8 w-8 p-0 text-gray-700 hover:text-red-600 hover:border-red-200"
-              >
-                <Square size={14} className="fill-current" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Stop & Reset</TooltipContent>
-          </Tooltip>
-
           {/* Skip Back -10s */}
           <Tooltip>
             <TooltipTrigger asChild>
@@ -313,20 +296,15 @@ export function AudioPlayer({
                 size="sm"
                 onClick={player.togglePlay}
                 disabled={!hasAudio || player.isLoading}
-                className="h-8 px-3 bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5"
+                aria-label={player.isPlaying ? 'Pause' : 'Play'}
+                className="h-8 w-8 p-0 bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center"
               >
                 {player.isLoading ? (
                   <Loader2 size={15} className="animate-spin" />
                 ) : player.isPlaying ? (
-                  <>
-                    <Pause size={15} className="fill-current" />
-                    <span className="text-xs font-medium">Pause</span>
-                  </>
+                  <Pause size={15} className="fill-current" />
                 ) : (
-                  <>
-                    <Play size={15} className="fill-current" />
-                    <span className="text-xs font-medium">Play</span>
-                  </>
+                  <Play size={15} className="fill-current" />
                 )}
               </Button>
             </TooltipTrigger>
