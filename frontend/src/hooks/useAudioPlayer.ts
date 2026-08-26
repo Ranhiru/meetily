@@ -83,7 +83,8 @@ export const useAudioPlayer = (audioPath: string | null): UseAudioPlayerReturn =
 
       audio.preload = 'metadata';
       audio.playbackRate = playbackRate;
-      audio.volume = isMuted ? 0 : volume;
+      audio.volume = volume;
+      audio.muted = isMuted;
 
       const handleLoadedMetadata = () => {
         if (!audio) return;
