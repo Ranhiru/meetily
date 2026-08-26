@@ -90,35 +90,47 @@ const TranscriptSegment = memo(function TranscriptSegment({
     isActive?: boolean;
 }) {
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
+    const seek = onTimestampClick ? () => onTimestampClick(timestamp) : undefined;
 
     return (
         <div id={`segment-${id}`} className="mb-2">
             <div
-                onClick={() => onTimestampClick?.(timestamp)}
                 className={`flex items-start gap-2.5 p-2 rounded-lg transition-all ${
                     isActive
                         ? 'bg-blue-50 border border-blue-300 shadow-sm ring-1 ring-blue-200'
-                        : onTimestampClick
-                        ? 'hover:bg-gray-100/70 cursor-pointer'
                         : ''
                 }`}
-                title={onTimestampClick ? `Click to play from ${formatRecordingTime(timestamp)}` : undefined}
             >
                 <Tooltip>
                     <TooltipTrigger asChild>
+                        {/* Only the badge seeks, so selecting the transcript text never starts playback */}
                         <span
-                            className={`text-xs mt-0.5 flex-shrink-0 min-w-[50px] font-mono select-none transition-colors ${
+                            onClick={seek}
+                            onKeyDown={seek && ((e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    seek();
+                                }
+                            })}
+                            role={seek ? 'button' : undefined}
+                            tabIndex={seek ? 0 : undefined}
+                            title={seek ? `Play from ${formatRecordingTime(timestamp)}` : undefined}
+                            className={`text-xs mt-0.5 flex-shrink-0 min-w-[50px] font-mono select-none transition-colors rounded ${
                                 isActive
                                     ? 'text-blue-600 font-bold'
                                     : 'text-gray-400 group-hover:text-gray-600'
+                            } ${
+                                seek
+                                    ? 'cursor-pointer hover:text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400'
+                                    : ''
                             }`}
                         >
                             {formatRecordingTime(timestamp)}
                         </span>
                     </TooltipTrigger>
                     <TooltipContent>
-                        {onTimestampClick ? (
-                            <span className="text-xs">Click to play from {formatRecordingTime(timestamp)}</span>
+                        {seek ? (
+                            <span className="text-xs">Play from {formatRecordingTime(timestamp)}</span>
                         ) : confidence !== undefined && showConfidence ? (
                             <ConfidenceIndicator confidence={confidence} showIndicator={showConfidence} />
                         ) : null}
