@@ -103,7 +103,8 @@ export interface PaginatedTranscriptsResponse {
 // Transcript segment data for virtualized display
 export interface TranscriptSegmentData {
   id: string;
-  timestamp: number; // audio_start_time in seconds
+  // audio_start_time in seconds; absent on transcripts recorded before offsets were stored
+  timestamp?: number;
   endTime?: number; // audio_end_time in seconds
   text: string;
   confidence?: number;

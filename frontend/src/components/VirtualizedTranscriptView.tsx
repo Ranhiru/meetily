@@ -34,6 +34,15 @@ export interface VirtualizedTranscriptViewProps {
     totalCount?: number;
     loadedCount?: number;
     onLoadMore?: () => void;
+
+    /** Callback when a timestamp badge is clicked (e.g. to seek audio player) */
+    onTimestampClick?: (timestamp: number) => void;
+
+    /** ID of the segment currently being played, highlighted in the list */
+    activeSegmentId?: string | null;
+
+    /** Scroll to keep the active segment in view as playback advances */
+    followActiveSegment?: boolean;
 }
 
 // Threshold for enabling virtualization (below this, use simple rendering)
@@ -71,40 +80,82 @@ const TranscriptSegment = memo(function TranscriptSegment({
     confidence,
     isStreaming,
     showConfidence,
+    onTimestampClick,
+    isActive = false,
 }: {
     id: string;
-    timestamp: number;
+    timestamp?: number;
     text: string;
     confidence?: number;
     isStreaming: boolean;
     showConfidence: boolean;
+    onTimestampClick?: (timestamp: number) => void;
+    isActive?: boolean;
 }) {
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
+    // A segment with no offset cannot be located in the recording, so it is not seekable
+    const seek =
+        onTimestampClick && timestamp !== undefined
+            ? () => onTimestampClick(timestamp)
+            : undefined;
 
     return (
-        <div id={`segment-${id}`} className="mb-3">
-            <div className="flex items-start gap-2">
-                <Tooltip>
-                    <TooltipTrigger>
-                        <span className="text-xs text-gray-400 mt-1 flex-shrink-0 min-w-[50px]">
-                            {formatRecordingTime(timestamp)}
-                        </span>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                        {confidence !== undefined && showConfidence && (
-                            <ConfidenceIndicator confidence={confidence} showIndicator={showConfidence} />
-                        )}
-                    </TooltipContent>
-                </Tooltip>
-                <div className="flex-1">
-                    {isStreaming ? (
-                        <div className="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
-                            <p className="text-base text-gray-800 leading-relaxed">{displayText}</p>
-                        </div>
-                    ) : (
-                        <p className="text-base text-gray-800 leading-relaxed">{displayText}</p>
-                    )}
+        <div id={`segment-${id}`} className="mb-2">
+            <div
+                className={`p-2 rounded-lg transition-all ${
+                    isActive
+                        ? 'bg-blue-50 border border-blue-300 shadow-sm ring-1 ring-blue-200'
+                        : ''
+                }`}
+            >
+                {/* Stacked above the text so the transcript gets the full column width */}
+                <div className="mb-0.5">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                            {/* Only the badge seeks, so selecting the transcript text never starts playback */}
+                            <span
+                                onClick={seek}
+                                onKeyDown={seek && ((e) => {
+                                    if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault();
+                                        seek();
+                                    }
+                                })}
+                                role={seek ? 'button' : undefined}
+                                tabIndex={seek ? 0 : undefined}
+                                title={seek ? `Play from ${formatRecordingTime(timestamp)}` : undefined}
+                                className={`inline-block text-xs font-mono select-none transition-colors rounded ${
+                                    isActive
+                                        ? 'text-blue-600 font-bold'
+                                        : 'text-gray-400'
+                                } ${
+                                    seek
+                                        ? 'cursor-pointer hover:text-blue-600 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400'
+                                        : ''
+                                }`}
+                            >
+                                {formatRecordingTime(timestamp)}
+                            </span>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                            {seek ? (
+                                <span className="text-xs">Play from {formatRecordingTime(timestamp)}</span>
+                            ) : confidence !== undefined && showConfidence ? (
+                                <ConfidenceIndicator confidence={confidence} showIndicator={showConfidence} />
+                            ) : null}
+                        </TooltipContent>
+                    </Tooltip>
                 </div>
+
+                {isStreaming ? (
+                    <div className="bg-gray-100 border border-gray-200 rounded-lg px-3 py-2">
+                        <p className="text-base text-gray-800 leading-relaxed">{displayText}</p>
+                    </div>
+                ) : (
+                    <p className={`text-base leading-relaxed ${isActive ? 'text-blue-950 font-medium' : 'text-gray-800'}`}>
+                        {displayText}
+                    </p>
+                )}
             </div>
         </div>
     );
@@ -124,6 +175,9 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     totalCount = 0,
     loadedCount = 0,
     onLoadMore,
+    onTimestampClick,
+    activeSegmentId,
+    followActiveSegment = false,
 }) => {
     // Create scroll ref first - shared between virtualizer and auto-scroll hook
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -155,6 +209,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
         virtualizer,
         virtualizationThreshold: VIRTUALIZATION_THRESHOLD,
         disableAutoScroll,
+        // Withholding the id is what keeps the hook from scrolling when following is off
+        activeSegmentId: followActiveSegment ? activeSegmentId ?? undefined : undefined,
     });
 
     // Streaming text effect hook (typewriter animation for new transcripts)
@@ -296,6 +352,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         confidence={segment.confidence}
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
+                                        onTimestampClick={onTimestampClick}
+                                        isActive={segment.id === activeSegmentId}
                                     />
                                 </div>
                             );
@@ -352,6 +410,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
                                         confidence={segment.confidence}
                                         isStreaming={isStreaming}
                                         showConfidence={showConfidence}
+                                        onTimestampClick={onTimestampClick}
+                                        isActive={segment.id === activeSegmentId}
                                     />
                                 </motion.div>
                             );

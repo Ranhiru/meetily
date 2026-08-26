@@ -1,7 +1,7 @@
 use log::{debug as log_debug, error as log_error, info as log_info, warn as log_warn};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_store::StoreExt;
 
 use crate::{
@@ -1072,6 +1072,122 @@ pub async fn open_meeting_folder<R: Runtime>(
             Err("Meeting not found".to_string())
         }
     }
+}
+
+/// Container formats the webview's audio element can decode.
+///
+/// Deliberately separate from AUDIO_EXTENSIONS and FFMPEG_ONLY_EXTENSIONS, which answer
+/// whether the backend can decode a file for transcription. That is a different question
+/// from whether the webview can play it, and the two lists do not agree.
+const WEBVIEW_PLAYABLE: &[&str] = &["mp4", "m4a", "aac", "mp3", "wav", "flac"];
+
+/// WebView2 and WebKitGTK decode these; WKWebView does not.
+#[cfg(not(target_os = "macos"))]
+const WEBVIEW_PLAYABLE_EXTRA: &[&str] = &["ogg", "webm"];
+#[cfg(target_os = "macos")]
+const WEBVIEW_PLAYABLE_EXTRA: &[&str] = &[];
+
+fn is_webview_playable(path: &std::path::Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|ext| {
+            let ext = ext.to_lowercase();
+            WEBVIEW_PLAYABLE.contains(&ext.as_str()) || WEBVIEW_PLAYABLE_EXTRA.contains(&ext.as_str())
+        })
+        .unwrap_or(false)
+}
+
+/// Why the meeting's recording audio is unavailable for in-app playback
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AudioUnavailableReason {
+    MeetingNotFound,
+    NoFolderRecorded,
+    FolderMissing,
+    NoAudioInFolder,
+    /// Found, but in a container the webview cannot decode. Carries the extension.
+    UnsupportedFormat(String),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MeetingAudio {
+    pub path: Option<String>,
+    pub unavailable_reason: Option<AudioUnavailableReason>,
+}
+
+impl MeetingAudio {
+    fn found(path: String) -> Self {
+        Self { path: Some(path), unavailable_reason: None }
+    }
+
+    fn unavailable(reason: AudioUnavailableReason) -> Self {
+        Self { path: None, unavailable_reason: Some(reason) }
+    }
+}
+
+/// Resolves the meeting's recording audio file path for direct in-app playback.
+///
+/// The recordings folder is user-configurable, so it cannot be covered by the static
+/// asset protocol scope. Each resolved file is granted to the webview individually
+/// instead of widening the scope to the whole filesystem.
+#[tauri::command]
+pub async fn get_meeting_audio_path<R: Runtime>(
+    app: AppHandle<R>,
+    state: tauri::State<'_, AppState>,
+    meeting_id: String,
+) -> Result<MeetingAudio, String> {
+    log_info!("get_meeting_audio_path called for meeting_id: {}", meeting_id);
+
+    let pool = state.db_manager.pool();
+
+    let meeting: Option<MeetingModel> = sqlx::query_as(
+        "SELECT id, title, created_at, updated_at, folder_path FROM meetings WHERE id = ?",
+    )
+    .bind(&meeting_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|e| format!("Database error: {}", e))?;
+
+    let Some(meeting) = meeting else {
+        log_warn!("Meeting not found: {}", meeting_id);
+        return Ok(MeetingAudio::unavailable(AudioUnavailableReason::MeetingNotFound));
+    };
+
+    let Some(folder_path) = meeting.folder_path else {
+        log_warn!("Meeting {} has no folder_path set", meeting_id);
+        return Ok(MeetingAudio::unavailable(AudioUnavailableReason::NoFolderRecorded));
+    };
+
+    let folder = std::path::Path::new(&folder_path);
+    if !folder.exists() {
+        log_warn!("Folder path does not exist: {}", folder_path);
+        return Ok(MeetingAudio::unavailable(AudioUnavailableReason::FolderMissing));
+    }
+
+    let Ok(audio_path) = crate::audio::retranscription::find_audio_file(folder) else {
+        log_warn!("No audio file found in folder: {}", folder_path);
+        return Ok(MeetingAudio::unavailable(AudioUnavailableReason::NoAudioInFolder));
+    };
+
+    if !is_webview_playable(&audio_path) {
+        let ext = audio_path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("unknown")
+            .to_lowercase();
+        log_warn!("Audio file is not playable in the webview: {}", audio_path.display());
+        return Ok(MeetingAudio::unavailable(
+            AudioUnavailableReason::UnsupportedFormat(ext),
+        ));
+    }
+
+    app.asset_protocol_scope()
+        .allow_file(&audio_path)
+        .map_err(|e| format!("Failed to grant audio file access: {}", e))?;
+
+    log_info!("Found meeting audio file: {}", audio_path.display());
+    Ok(MeetingAudio::found(audio_path.to_string_lossy().to_string()))
 }
 
 // Simple test command to check backend connectivity

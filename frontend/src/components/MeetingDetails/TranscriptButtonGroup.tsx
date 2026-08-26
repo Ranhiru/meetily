@@ -16,6 +16,10 @@ interface TranscriptButtonGroupProps {
   meetingId?: string;
   meetingFolderPath?: string | null;
   onRefetchTranscripts?: () => Promise<void>;
+  isPlayerOpen?: boolean;
+  onTogglePlayer?: () => void;
+  hasAudio?: boolean;
+  isPlaying?: boolean;
 }
 
 
@@ -26,6 +30,10 @@ export function TranscriptButtonGroup({
   meetingId,
   meetingFolderPath,
   onRefetchTranscripts,
+  isPlayerOpen = false,
+  onTogglePlayer,
+  hasAudio = false,
+  isPlaying = false,
 }: TranscriptButtonGroupProps) {
   const { betaFeatures } = useConfig();
   const [showRetranscribeDialog, setShowRetranscribeDialog] = useState(false);
@@ -36,6 +44,16 @@ export function TranscriptButtonGroup({
       await onRefetchTranscripts();
     }
   }, [onRefetchTranscripts]);
+
+  const handleRecordingClick = () => {
+    if (onTogglePlayer) {
+      Analytics.trackButtonClick('toggle_audio_player', 'meeting_details');
+      onTogglePlayer();
+    } else {
+      Analytics.trackButtonClick('open_recording_folder', 'meeting_details');
+      onOpenMeetingFolder();
+    }
+  };
 
   return (
     <div className="flex items-center justify-center w-full gap-2">
@@ -57,15 +75,22 @@ export function TranscriptButtonGroup({
         <Button
           size="sm"
           variant="outline"
-          className="xl:px-4"
-          onClick={() => {
-            Analytics.trackButtonClick('open_recording_folder', 'meeting_details');
-            onOpenMeetingFolder();
-          }}
-          title="Open Recording Folder"
+          className={`xl:px-4 ${
+            isPlayerOpen
+              ? 'bg-blue-50 text-blue-700 border-blue-300 hover:bg-blue-100 hover:text-blue-800'
+              : ''
+          }`}
+          onClick={handleRecordingClick}
+          title={hasAudio ? (isPlayerOpen ? 'Hide Audio Player' : 'Play Recording') : 'Open Recording Folder'}
         >
-          <FolderOpen className="xl:mr-2" size={18} />
+          <FolderOpen className={`xl:mr-2 ${isPlayerOpen ? 'text-blue-600' : ''}`} size={18} />
           <span className="hidden lg:inline">Recording</span>
+          {isPlaying && (
+            <span className="ml-1.5 flex h-2 w-2 relative">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+            </span>
+          )}
         </Button>
 
         {betaFeatures.importAndRetranscribe && meetingId && meetingFolderPath && (
