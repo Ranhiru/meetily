@@ -48,15 +48,18 @@ function describeUnavailableAudio(reason: AudioUnavailableReason | null): string
 /**
  * Finds the segment covering `time`, assuming segments are ordered by timestamp ascending.
  * Returns null while playback sits in a gap after a segment with a known end time.
+ *
+ * Callers pass only segments that carry an offset; segments without one cannot be located in
+ * the recording and must not be treated as sitting at zero.
  */
-function findSegmentIdAt(segments: TranscriptSegmentData[], time: number): string | null {
+function findSegmentIdAt(locatable: TranscriptSegmentData[], time: number): string | null {
   let low = 0;
-  let high = segments.length - 1;
+  let high = locatable.length - 1;
   let candidate = -1;
 
   while (low <= high) {
     const mid = (low + high) >> 1;
-    if (segments[mid].timestamp <= time) {
+    if (locatable[mid].timestamp! <= time) {
       candidate = mid;
       low = mid + 1;
     } else {
@@ -66,7 +69,7 @@ function findSegmentIdAt(segments: TranscriptSegmentData[], time: number): strin
 
   if (candidate === -1) return null;
 
-  const segment = segments[candidate];
+  const segment = locatable[candidate];
   if (segment.endTime !== undefined && time > segment.endTime) return null;
 
   return segment.id;
@@ -182,18 +185,24 @@ export function TranscriptPanel({
     // Convert transcripts to segments for virtualization
     return transcripts.map(t => ({
       id: t.id,
-      timestamp: t.audio_start_time ?? 0,
+      timestamp: t.audio_start_time,
       endTime: t.audio_end_time,
       text: t.text,
       confidence: t.confidence,
     }));
   }, [transcripts, usePagination, segments]);
 
+  // Filtered once per segment change rather than on every playback tick
+  const locatableSegments = useMemo(
+    () => convertedSegments.filter((s) => s.timestamp !== undefined),
+    [convertedSegments]
+  );
+
   // The segment currently being played, used to highlight and follow along
   const activeSegmentId = useMemo(() => {
-    if (!isAudioAvailable || convertedSegments.length === 0) return null;
-    return findSegmentIdAt(convertedSegments, player.currentTime);
-  }, [isAudioAvailable, convertedSegments, player.currentTime]);
+    if (!isAudioAvailable || locatableSegments.length === 0) return null;
+    return findSegmentIdAt(locatableSegments, player.currentTime);
+  }, [isAudioAvailable, locatableSegments, player.currentTime]);
 
   const handleTogglePlayer = useCallback(() => {
     // Resolution is in flight, so we do not yet know whether this meeting has audio

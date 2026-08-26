@@ -84,7 +84,7 @@ const TranscriptSegment = memo(function TranscriptSegment({
     isActive = false,
 }: {
     id: string;
-    timestamp: number;
+    timestamp?: number;
     text: string;
     confidence?: number;
     isStreaming: boolean;
@@ -93,7 +93,11 @@ const TranscriptSegment = memo(function TranscriptSegment({
     isActive?: boolean;
 }) {
     const displayText = cleanStopWords(text) || (text.trim() === '' ? '[Silence]' : text);
-    const seek = onTimestampClick ? () => onTimestampClick(timestamp) : undefined;
+    // A segment with no offset cannot be located in the recording, so it is not seekable
+    const seek =
+        onTimestampClick && timestamp !== undefined
+            ? () => onTimestampClick(timestamp)
+            : undefined;
 
     return (
         <div id={`segment-${id}`} className="mb-2">
