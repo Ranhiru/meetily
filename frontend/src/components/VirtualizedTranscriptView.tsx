@@ -40,6 +40,9 @@ export interface VirtualizedTranscriptViewProps {
 
     /** ID of the segment currently being played, highlighted in the list */
     activeSegmentId?: string | null;
+
+    /** Scroll to keep the active segment in view as playback advances */
+    followActiveSegment?: boolean;
 }
 
 // Threshold for enabling virtualization (below this, use simple rendering)
@@ -168,6 +171,7 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
     onLoadMore,
     onTimestampClick,
     activeSegmentId,
+    followActiveSegment = false,
 }) => {
     // Create scroll ref first - shared between virtualizer and auto-scroll hook
     const scrollRef = useRef<HTMLDivElement>(null);
@@ -199,6 +203,8 @@ export const VirtualizedTranscriptView: React.FC<VirtualizedTranscriptViewProps>
         virtualizer,
         virtualizationThreshold: VIRTUALIZATION_THRESHOLD,
         disableAutoScroll,
+        // Withholding the id is what keeps the hook from scrolling when following is off
+        activeSegmentId: followActiveSegment ? activeSegmentId ?? undefined : undefined,
     });
 
     // Streaming text effect hook (typewriter animation for new transcripts)

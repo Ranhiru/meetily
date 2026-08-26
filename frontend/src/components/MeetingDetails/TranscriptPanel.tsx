@@ -119,6 +119,9 @@ export function TranscriptPanel({
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
   const [unavailableReason, setUnavailableReason] = useState<AudioUnavailableReason | null>(null);
   const [isResolvingAudio, setIsResolvingAudio] = useState(false);
+  // Opt-in: the transcript panel disables auto-scroll by default, so following is off
+  // until the user asks for it from the player.
+  const [isFollowing, setIsFollowing] = useState(false);
 
   // The player lives here rather than inside AudioPlayer so playback survives collapsing
   // the player bar, and so the transcript can follow along with the current time.
@@ -250,6 +253,8 @@ export function TranscriptPanel({
             <AudioPlayer
               player={player}
               hasAudio={isAudioAvailable}
+              isFollowing={isFollowing}
+              onToggleFollow={() => setIsFollowing((prev) => !prev)}
               onOpenFolder={onOpenMeetingFolder}
               onClose={() => setIsPlayerOpen(false)}
             />
@@ -275,6 +280,7 @@ export function TranscriptPanel({
           onLoadMore={onLoadMore}
           onTimestampClick={handleTimestampClick}
           activeSegmentId={activeSegmentId}
+          followActiveSegment={isFollowing}
         />
       </div>
 

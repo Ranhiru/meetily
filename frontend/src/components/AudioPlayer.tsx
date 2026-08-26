@@ -14,7 +14,9 @@ import {
   X,
   Loader2,
   Gauge,
-  AlertCircle
+  AlertCircle,
+  LocateFixed,
+  LocateOff
 } from 'lucide-react';
 import { PlaybackRate, UseAudioPlayerReturn } from '@/hooks/useAudioPlayer';
 import { Button } from '@/components/ui/button';
@@ -30,6 +32,9 @@ export interface AudioPlayerProps {
   /** Playback state and controls, owned by the parent so they outlive this component */
   player: UseAudioPlayerReturn;
   hasAudio: boolean;
+  /** Whether the transcript scrolls to follow the playing segment */
+  isFollowing?: boolean;
+  onToggleFollow?: () => void;
   meetingTitle?: string;
   onOpenFolder?: () => void;
   onClose?: () => void;
@@ -58,6 +63,8 @@ const PLAYBACK_RATES: PlaybackRate[] = [1, 1.2, 1.5, 2];
 export function AudioPlayer({
   player,
   hasAudio,
+  isFollowing = false,
+  onToggleFollow,
   meetingTitle,
   onOpenFolder,
   onClose,
@@ -158,6 +165,30 @@ export function AudioPlayer({
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {/* Follow the playing segment in the transcript */}
+          {onToggleFollow && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={onToggleFollow}
+                  aria-pressed={isFollowing}
+                  className={`h-7 w-7 p-0 ${
+                    isFollowing
+                      ? 'text-blue-600 bg-blue-50 hover:bg-blue-100 hover:text-blue-700'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                  }`}
+                >
+                  {isFollowing ? <LocateFixed size={14} /> : <LocateOff size={14} />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {isFollowing ? 'Stop following the transcript' : 'Follow along in the transcript'}
+              </TooltipContent>
+            </Tooltip>
+          )}
 
           {/* Open Folder in File Manager */}
           {onOpenFolder && (
