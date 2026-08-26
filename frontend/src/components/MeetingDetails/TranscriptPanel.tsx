@@ -109,6 +109,7 @@ export function TranscriptPanel({
   const [audioPath, setAudioPath] = useState<string | null>(null);
   const [isPlayerOpen, setIsPlayerOpen] = useState(false);
   const [unavailableReason, setUnavailableReason] = useState<AudioUnavailableReason | null>(null);
+  const [isResolvingAudio, setIsResolvingAudio] = useState(false);
 
   // The player lives here rather than inside AudioPlayer so playback survives collapsing
   // the player bar, and so the transcript can follow along with the current time.
@@ -119,13 +120,17 @@ export function TranscriptPanel({
   useEffect(() => {
     let isCancelled = false;
 
+    // Drop the previous meeting's recording before awaiting the next path, so it cannot keep
+    // playing, and so this transcript's timestamps cannot seek the wrong audio.
+    setAudioPath(null);
+    setUnavailableReason(null);
+
     const checkAudioPath = async () => {
       if (!meetingId || meetingId === 'intro-call') {
-        setAudioPath(null);
-        setUnavailableReason(null);
         return;
       }
 
+      setIsResolvingAudio(true);
       try {
         const audio = await invoke<MeetingAudio>('get_meeting_audio_path', { meetingId });
 
@@ -135,9 +140,9 @@ export function TranscriptPanel({
         }
       } catch (err) {
         console.warn('Could not resolve meeting audio path:', err);
+      } finally {
         if (!isCancelled) {
-          setAudioPath(null);
-          setUnavailableReason(null);
+          setIsResolvingAudio(false);
         }
       }
     };
@@ -149,12 +154,13 @@ export function TranscriptPanel({
     };
   }, [meetingId, meetingFolderPath]);
 
-  // Collapse the player and stop playback when switching to a meeting with no recording
+  // Collapse the player once resolution has settled on a meeting with no recording. Waiting for
+  // it to settle keeps the player open across a switch between two meetings that both have audio.
   useEffect(() => {
-    if (!audioPath) {
+    if (!isResolvingAudio && !audioPath) {
       setIsPlayerOpen(false);
     }
-  }, [audioPath]);
+  }, [isResolvingAudio, audioPath]);
 
   // Convert transcripts to segments if pagination is not used but we want virtualization
   const convertedSegments = useMemo(() => {
@@ -178,16 +184,21 @@ export function TranscriptPanel({
   }, [isAudioAvailable, convertedSegments, player.currentTime]);
 
   const handleTogglePlayer = useCallback(() => {
+    // Resolution is in flight, so we do not yet know whether this meeting has audio
+    if (isResolvingAudio) return;
+
     if (!isAudioAvailable) {
       toast.info(`${describeUnavailableAudio(unavailableReason)} Opening folder...`);
       onOpenMeetingFolder();
       return;
     }
     setIsPlayerOpen((prev) => !prev);
-  }, [isAudioAvailable, unavailableReason, onOpenMeetingFolder]);
+  }, [isResolvingAudio, isAudioAvailable, unavailableReason, onOpenMeetingFolder]);
 
   const handleTimestampClick = useCallback(
     (timestamp: number) => {
+      if (isResolvingAudio) return;
+
       if (!isAudioAvailable) {
         toast.info(describeUnavailableAudio(unavailableReason));
         return;
@@ -196,7 +207,7 @@ export function TranscriptPanel({
       player.seek(timestamp);
       player.play();
     },
-    [isAudioAvailable, unavailableReason, player.seek, player.play]
+    [isResolvingAudio, isAudioAvailable, unavailableReason, player.seek, player.play]
   );
 
   return (
