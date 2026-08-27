@@ -18,7 +18,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Switch } from '@/components/ui/switch';
 import { Lock, Unlock, Eye, EyeOff, RefreshCw, CheckCircle2, XCircle, ChevronDown, ChevronUp, Download, ExternalLink, Check, ChevronsUpDown } from 'lucide-react';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Command,
   CommandEmpty,
@@ -73,6 +73,17 @@ interface GroqModel {
   id: string;
   owned_by?: string;
 }
+
+interface CustomOpenAIModel {
+  id: string;
+  contextLength?: number | null;
+}
+
+// Context windows are advertised in tokens; show them the way model docs do
+const formatContextLength = (tokens?: number | null): string | null => {
+  if (!tokens || tokens < 1024) return null;
+  return `${Math.round(tokens / 1024)}K ctx`;
+};
 
 // Fallback models for when API fetch fails or no API key provided
 const OPENAI_FALLBACK_MODELS = [
@@ -154,6 +165,9 @@ export function ModelSettingsModal({
   const [customTopP, setCustomTopP] = useState<string>(modelConfig.topP?.toString() || '');
   const [isCustomOpenAIAdvancedOpen, setIsCustomOpenAIAdvancedOpen] = useState<boolean>(false);
   const [isTestingConnection, setIsTestingConnection] = useState<boolean>(false);
+  const [customOpenAIModels, setCustomOpenAIModels] = useState<CustomOpenAIModel[]>([]);
+  const [isLoadingCustomModels, setIsLoadingCustomModels] = useState<boolean>(false);
+  const [customModelComboboxOpen, setCustomModelComboboxOpen] = useState<boolean>(false);
 
   // Combobox state
   const [modelComboboxOpen, setModelComboboxOpen] = useState<boolean>(false);
@@ -175,15 +189,23 @@ export function ModelSettingsModal({
   // Cache models by endpoint to avoid refetching when reverting endpoint changes
   const modelsCache = useRef<Map<string, OllamaModel[]>>(new Map());
 
-  // URL validation helper
-  const validateOllamaEndpoint = (url: string): boolean => {
-    if (!url.trim()) return true; // Empty is valid (uses default)
+  // Cache custom OpenAI model listings by endpoint, same as the Ollama cache above
+  const customModelsCache = useRef<Map<string, CustomOpenAIModel[]>>(new Map());
+  const requestedCustomEndpoint = useRef<string>('');
+
+  // URL validation helpers
+  const isHttpUrl = (url: string): boolean => {
     try {
       const parsed = new URL(url);
       return parsed.protocol === 'http:' || parsed.protocol === 'https:';
     } catch {
       return false;
     }
+  };
+
+  const validateOllamaEndpoint = (url: string): boolean => {
+    if (!url.trim()) return true; // Empty is valid (uses default)
+    return isHttpUrl(url);
   };
 
   // Debounced URL validation with visual feedback
@@ -232,6 +254,15 @@ export function ModelSettingsModal({
     'builtin-ai': builtinAiModels.map((m) => m.name),
     'custom-openai': customOpenAIModel ? [customOpenAIModel] : [], // User specifies model manually
   };
+
+  // The custom model field is a plain text input until the server lists models for us
+  const hasCustomModelList = customOpenAIModels.length > 0 || isLoadingCustomModels;
+
+  // An exact match means the user picked from the list, so keep showing all options
+  const customModelQuery = customOpenAIModel.trim().toLowerCase();
+  const filteredCustomModels = customOpenAIModels.some((m) => m.id.toLowerCase() === customModelQuery)
+    ? customOpenAIModels
+    : customOpenAIModels.filter((m) => m.id.toLowerCase().includes(customModelQuery));
 
   const requiresApiKey =
     modelConfig.provider === 'claude' ||
@@ -576,6 +607,51 @@ export function ModelSettingsModal({
       setIsLoadingGroq(false);
     }
   };
+
+  // Fetch models from a custom OpenAI-compatible server
+  const loadCustomOpenAIModels = async (endpoint: string, apiKey: string) => {
+    requestedCustomEndpoint.current = endpoint;
+    const isStale = () => requestedCustomEndpoint.current !== endpoint;
+
+    const cached = customModelsCache.current.get(endpoint);
+    if (cached) {
+      setCustomOpenAIModels(cached);
+      return;
+    }
+
+    setIsLoadingCustomModels(true);
+    try {
+      const data = (await invoke('api_list_custom_openai_models', {
+        endpoint,
+        apiKey: apiKey.trim() || null,
+      })) as CustomOpenAIModel[];
+      customModelsCache.current.set(endpoint, data);
+      if (!isStale()) setCustomOpenAIModels(data);
+    } catch (err) {
+      // Listing is optional - the model name stays a plain text field
+      console.error('Error loading custom server models:', err);
+      if (!isStale()) setCustomOpenAIModels([]);
+    } finally {
+      if (!isStale()) setIsLoadingCustomModels(false);
+    }
+  };
+
+  // Debounced model listing while the user edits the custom endpoint or key
+  useEffect(() => {
+    if (modelConfig.provider !== 'custom-openai') return;
+
+    const endpoint = customOpenAIEndpoint.trim();
+    if (!isHttpUrl(endpoint)) {
+      setCustomOpenAIModels([]);
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      loadCustomOpenAIModels(endpoint, customOpenAIApiKey);
+    }, 600);
+
+    return () => clearTimeout(timer);
+  }, [modelConfig.provider, customOpenAIEndpoint, customOpenAIApiKey]);
 
   // Auto-fetch OpenAI models when provider is openai and we have an API key
   useEffect(() => {
@@ -963,13 +1039,80 @@ export function ModelSettingsModal({
 
             <div>
               <Label htmlFor="custom-model">Model Name *</Label>
-              <Input
-                id="custom-model"
-                value={customOpenAIModel}
-                onChange={(e) => setCustomOpenAIModel(e.target.value)}
-                placeholder="gpt-4, llama-3-70b, etc."
-                className="mt-1"
-              />
+              <Popover open={customModelComboboxOpen} onOpenChange={setCustomModelComboboxOpen}>
+                <PopoverAnchor asChild>
+                  <div className="relative mt-1">
+                    <Input
+                      id="custom-model"
+                      value={customOpenAIModel}
+                      onChange={(e) => setCustomOpenAIModel(e.target.value)}
+                      placeholder="gpt-4, llama-3-70b, etc."
+                      className={hasCustomModelList ? 'pr-9' : undefined}
+                    />
+                    {hasCustomModelList && (
+                      <PopoverTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label="Show available models"
+                          aria-expanded={customModelComboboxOpen}
+                          className="absolute right-0 top-0 h-full px-3 flex items-center text-muted-foreground hover:text-foreground"
+                        >
+                          {isLoadingCustomModels ? (
+                            <RefreshCw className="h-4 w-4 animate-spin" />
+                          ) : (
+                            <ChevronsUpDown className="h-4 w-4 opacity-50" />
+                          )}
+                        </button>
+                      </PopoverTrigger>
+                    )}
+                  </div>
+                </PopoverAnchor>
+                <PopoverContent
+                  className="w-[--radix-popover-trigger-width] p-0"
+                  align="start"
+                  onOpenAutoFocus={(e) => e.preventDefault()}
+                >
+                  <Command shouldFilter={false}>
+                    <CommandList className="max-h-[300px]">
+                      {isLoadingCustomModels ? (
+                        <div className="py-6 text-center text-sm text-muted-foreground">
+                          <RefreshCw className="mx-auto h-4 w-4 animate-spin mb-2" />
+                          Loading models...
+                        </div>
+                      ) : (
+                        <>
+                          <CommandEmpty>No matching models. Keep typing to use a custom name.</CommandEmpty>
+                          <CommandGroup>
+                            {filteredCustomModels.map((model) => (
+                              <CommandItem
+                                key={model.id}
+                                value={model.id}
+                                onSelect={() => {
+                                  setCustomOpenAIModel(model.id);
+                                  setCustomModelComboboxOpen(false);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4 shrink-0",
+                                    customOpenAIModel === model.id ? "opacity-100" : "opacity-0"
+                                  )}
+                                />
+                                <span className="truncate">{model.id}</span>
+                                {formatContextLength(model.contextLength) && (
+                                  <span className="ml-auto pl-2 shrink-0 text-xs text-muted-foreground">
+                                    {formatContextLength(model.contextLength)}
+                                  </span>
+                                )}
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
               <p className="text-xs text-muted-foreground mt-1">
                 Model identifier to use for requests
               </p>
