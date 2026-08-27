@@ -1497,3 +1497,123 @@ pub async fn api_test_custom_openai_connection<R: Runtime>(
         }
     }
 }
+
+/// A model advertised by a custom OpenAI-compatible endpoint
+/// `context_length` comes from non-standard fields that some servers add, so it stays optional
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CustomOpenAIModel {
+    pub id: String,
+    #[serde(rename = "contextLength")]
+    pub context_length: Option<u64>,
+}
+
+/// Models that cannot answer a chat completion, so they are useless for summarization
+fn is_chat_capable_model(model_id: &str) -> bool {
+    let id = model_id.to_lowercase();
+    !(id.contains("embed")
+        || id.contains("rerank")
+        || id.contains("whisper")
+        || id.contains("tts")
+        || id.contains("dall-e")
+        || id.contains("moderation"))
+}
+
+/// Lists the models advertised by a custom OpenAI-compatible endpoint
+/// Uses a short timeout because the frontend calls this while the user edits the endpoint
+#[tauri::command]
+pub async fn api_list_custom_openai_models<R: Runtime>(
+    _app: AppHandle<R>,
+    endpoint: String,
+    api_key: Option<String>,
+) -> Result<Vec<CustomOpenAIModel>, String> {
+    log_info!("api_list_custom_openai_models called: endpoint='{}'", &endpoint);
+
+    if !endpoint.starts_with("http://") && !endpoint.starts_with("https://") {
+        return Err("Endpoint must start with http:// or https://".to_string());
+    }
+
+    let url = format!("{}/models", endpoint.trim_end_matches('/'));
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(5))
+        .build()
+        .map_err(|e| format!("Failed to create HTTP client: {}", e))?;
+
+    let mut request = client.get(&url);
+
+    if let Some(key) = api_key.filter(|k| !k.trim().is_empty()) {
+        request = request.header("Authorization", format!("Bearer {}", key));
+    }
+
+    let response = request.send().await.map_err(|e| {
+        log_warn!("⚠️ Failed to list models from {}: {}", &url, e);
+        format!("Could not reach {}: {}", url, e)
+    })?;
+
+    let status = response.status();
+    let body = response.text().await.unwrap_or_default();
+
+    if !status.is_success() {
+        log_warn!("⚠️ Model listing returned status {}: {}", status, body);
+        return Err(format!("Model listing failed with status {}", status));
+    }
+
+    let json: serde_json::Value = serde_json::from_str(&body).map_err(|e| {
+        log_warn!("⚠️ Model listing returned invalid JSON: {}", e);
+        format!("Model listing returned invalid JSON: {}", e)
+    })?;
+
+    let entries = json
+        .get("data")
+        .and_then(|d| d.as_array())
+        .ok_or_else(|| "Model listing response is missing a 'data' array".to_string())?;
+
+    let mut models: Vec<CustomOpenAIModel> = Vec::with_capacity(entries.len());
+    for entry in entries {
+        let Some(id) = entry.get("id").and_then(|i| i.as_str()) else {
+            continue;
+        };
+        let id = id.trim();
+        if id.is_empty() || models.iter().any(|m| m.id == id) {
+            continue;
+        }
+
+        // Servers name the context window differently; take whichever one is present
+        let context_length = ["max_model_len", "context_length", "context_window"]
+            .iter()
+            .find_map(|key| entry.get(*key).and_then(|v| v.as_u64()));
+
+        models.push(CustomOpenAIModel {
+            id: id.to_string(),
+            context_length,
+        });
+    }
+
+    if models.is_empty() {
+        log_warn!("⚠️ Model listing returned no usable model ids");
+        return Err("Endpoint returned no models".to_string());
+    }
+
+    // Hide embedding/reranker models, but never hide the whole server over a name heuristic
+    let chat_models: Vec<CustomOpenAIModel> = models
+        .iter()
+        .filter(|m| is_chat_capable_model(&m.id))
+        .cloned()
+        .collect();
+    let mut models = if chat_models.is_empty() {
+        models
+    } else {
+        chat_models
+    };
+
+    // Case-insensitive so casing variants of the same model land next to each other
+    models.sort_by(|a, b| {
+        a.id
+            .to_lowercase()
+            .cmp(&b.id.to_lowercase())
+            .then_with(|| a.id.cmp(&b.id))
+    });
+
+    log_info!("✅ Listed {} models from custom endpoint", models.len());
+    Ok(models)
+}
