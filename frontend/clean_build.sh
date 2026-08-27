@@ -30,9 +30,9 @@ else
 fi
 
 # Clean up previous builds
+# The Cargo target dir lives at the workspace root, so let cargo find it
 echo "Cleaning up previous builds..."
-rm -rf target/
-rm -rf src-tauri/target
+(cd src-tauri && cargo clean)
 rm -rf src-tauri/gen
 
 # Clean up npm, pnp and next
