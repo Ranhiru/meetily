@@ -761,8 +761,8 @@ const Sidebar: React.FC = () => {
                 {filteredSidebarItems
                   .filter(item => item.type === 'folder' && expandedFolders.has(item.id) && item.children)
                   .map(item => (
-                    <div key={`${item.id}-children`} className="mx-3">
-                      {item.children!.map(child => renderItem(child, 1))}
+                    <div key={`${item.id}-children`} className="mx-2">
+                      {item.children!.map(child => renderItem(child))}
                     </div>
                   ))}
               </div>
