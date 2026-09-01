@@ -11,6 +11,14 @@ pub struct MeetingModel {
     pub folder_path: Option<String>,
 }
 
+#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
+pub struct MeetingListItem {
+    pub id: String,
+    pub title: String,
+    pub created_at: String,
+    pub duration_seconds: Option<f64>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, sqlx::Type)]
 #[sqlx(transparent)]
 pub struct DateTimeUtc(pub DateTime<Utc>);

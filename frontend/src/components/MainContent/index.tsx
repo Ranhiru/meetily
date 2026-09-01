@@ -8,13 +8,12 @@ interface MainContentProps {
 }
 
 const MainContent: React.FC<MainContentProps> = ({ children }) => {
-  const { isCollapsed } = useSidebar();
+  const { sidebarOffset } = useSidebar();
 
   return (
-    <main 
-      className={`flex-1 transition-all duration-300 ${
-        isCollapsed ? 'ml-16' : 'ml-64'
-      }`}
+    <main
+      className="flex-1 transition-[margin] duration-300"
+      style={{ marginLeft: sidebarOffset }}
     >
       <div className="pl-8">
         {children}

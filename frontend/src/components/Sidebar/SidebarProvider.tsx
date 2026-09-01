@@ -12,11 +12,15 @@ interface SidebarItem {
   title: string;
   type: 'folder' | 'file';
   children?: SidebarItem[];
+  createdAt?: string;
+  durationSeconds?: number | null;
 }
 
 export interface CurrentMeeting {
   id: string;
   title: string;
+  createdAt?: string;
+  durationSeconds?: number | null;
 }
 
 // Search result type for transcript search
@@ -33,6 +37,9 @@ interface SidebarContextType {
   sidebarItems: SidebarItem[];
   isCollapsed: boolean;
   toggleCollapse: () => void;
+  sidebarWidth: number;
+  setSidebarWidth: (width: number) => void;
+  sidebarOffset: number;
   meetings: CurrentMeeting[];
   setMeetings: (meetings: CurrentMeeting[]) => void;
   isMeetingActive: boolean;
@@ -54,6 +61,15 @@ interface SidebarContextType {
 
 }
 
+export const SIDEBAR_MIN_WIDTH = 200;
+export const SIDEBAR_MAX_WIDTH = 560;
+export const SIDEBAR_DEFAULT_WIDTH = 256;
+export const SIDEBAR_COLLAPSED_WIDTH = 64;
+const SIDEBAR_WIDTH_STORAGE_KEY = 'meetily.sidebarWidth';
+
+const clampSidebarWidth = (width: number) =>
+  Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, Math.round(width)));
+
 const SidebarContext = createContext<SidebarContextType | null>(null);
 
 export const useSidebar = () => {
@@ -67,6 +83,7 @@ export const useSidebar = () => {
 export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const [currentMeeting, setCurrentMeeting] = useState<CurrentMeeting | null>({ id: 'intro-call', title: '+ New Call' });
   const [isCollapsed, setIsCollapsed] = useState(true);
+  const [sidebarWidth, setSidebarWidthState] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [meetings, setMeetings] = useState<CurrentMeeting[]>([]);
   const [sidebarItems, setSidebarItems] = useState<SidebarItem[]>([]);
   const [isMeetingActive, setIsMeetingActive] = useState(false);
@@ -86,10 +103,12 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const fetchMeetings = React.useCallback(async () => {
     if (serverAddress) {
       try {
-        const meetings = await invoke('api_get_meetings') as Array<{ id: string, title: string }>;
-        const transformedMeetings = meetings.map((meeting: any) => ({
+        const meetings = await invoke('api_get_meetings') as Array<{ id: string, title: string, created_at: string, duration_seconds: number | null }>;
+        const transformedMeetings = meetings.map((meeting) => ({
           id: meeting.id,
-          title: meeting.title
+          title: meeting.title,
+          createdAt: meeting.created_at,
+          durationSeconds: meeting.duration_seconds
         }));
         setMeetings(transformedMeetings);
         Analytics.trackBackendConnection(true);
@@ -119,7 +138,13 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       title: 'Meeting Notes',
       type: 'folder' as const,
       children: [
-        ...meetings.map(meeting => ({ id: meeting.id, title: meeting.title, type: 'file' as const }))
+        ...meetings.map(meeting => ({
+          id: meeting.id,
+          title: meeting.title,
+          type: 'file' as const,
+          createdAt: meeting.createdAt,
+          durationSeconds: meeting.durationSeconds
+        }))
       ]
     },
   ];
@@ -128,6 +153,23 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
   };
+
+  // Restore the persisted sidebar width once the client is hydrated
+  useEffect(() => {
+    const stored = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
+    if (stored) {
+      const parsed = Number.parseInt(stored, 10);
+      if (!Number.isNaN(parsed)) {
+        setSidebarWidthState(clampSidebarWidth(parsed));
+      }
+    }
+  }, []);
+
+  const setSidebarWidth = React.useCallback((width: number) => {
+    const clamped = clampSidebarWidth(width);
+    setSidebarWidthState(clamped);
+    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(clamped));
+  }, []);
 
   // Update current meeting when on home page
   useEffect(() => {
@@ -296,6 +338,9 @@ export function SidebarProvider({ children }: { children: React.ReactNode }) {
       sidebarItems,
       isCollapsed,
       toggleCollapse,
+      sidebarWidth,
+      setSidebarWidth,
+      sidebarOffset: isCollapsed ? SIDEBAR_COLLAPSED_WIDTH : sidebarWidth,
       meetings,
       setMeetings,
       isMeetingActive,
