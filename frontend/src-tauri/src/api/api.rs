@@ -30,6 +30,8 @@ pub struct ApiResponse<T> {
 pub struct Meeting {
     pub id: String,
     pub title: String,
+    pub created_at: String,
+    pub duration_seconds: Option<f64>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -329,8 +331,7 @@ pub async fn api_get_meetings<R: Runtime>(
         auth_token.is_some()
     );
     let pool = state.db_manager.pool();
-    let meetings: Result<Vec<MeetingModel>, sqlx::Error> =
-        MeetingsRepository::get_meetings(pool).await;
+    let meetings = MeetingsRepository::get_meeting_list(pool).await;
 
     match meetings {
         Ok(meeting_models) => {
@@ -341,6 +342,8 @@ pub async fn api_get_meetings<R: Runtime>(
                 .map(|m| Meeting {
                     id: m.id,
                     title: m.title,
+                    created_at: m.created_at,
+                    duration_seconds: m.duration_seconds,
                 })
                 .collect();
             Ok(result)

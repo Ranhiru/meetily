@@ -1,5 +1,5 @@
 use crate::api::{MeetingDetails, MeetingTranscript};
-use crate::database::models::{MeetingModel, Transcript};
+use crate::database::models::{MeetingListItem, MeetingModel, Transcript};
 use chrono::Utc;
 use sqlx::{Connection, Error as SqlxError, SqliteConnection, SqlitePool};
 use tracing::{error, info};
@@ -12,6 +12,19 @@ impl MeetingsRepository {
             sqlx::query_as::<_, MeetingModel>("SELECT * FROM meetings ORDER BY created_at DESC")
                 .fetch_all(pool)
                 .await?;
+        Ok(meetings)
+    }
+
+    pub async fn get_meeting_list(pool: &SqlitePool) -> Result<Vec<MeetingListItem>, sqlx::Error> {
+        let meetings = sqlx::query_as::<_, MeetingListItem>(
+            "SELECT m.id, m.title, m.created_at,
+                    (SELECT MAX(t.audio_end_time) FROM transcripts t WHERE t.meeting_id = m.id)
+                        AS duration_seconds
+             FROM meetings m
+             ORDER BY m.created_at DESC",
+        )
+        .fetch_all(pool)
+        .await?;
         Ok(meetings)
     }
 
