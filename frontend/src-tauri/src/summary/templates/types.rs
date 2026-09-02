@@ -191,4 +191,46 @@ mod tests {
         assert_eq!(saved["sections"][2]["item_format"], "YYYY-MM-DD");
         assert!(saved["sections"][2].get("example_item_format").is_none());
     }
+
+    #[test]
+    fn section_order_is_retained_in_prompt_instructions_and_skeleton() {
+        let template = Template {
+            name: "Ordered".to_string(),
+            description: "Order matters".to_string(),
+            sections: vec![
+                TemplateSection {
+                    title: "Decisions".to_string(),
+                    instruction: "List the decisions".to_string(),
+                    format: "list".to_string(),
+                    item_format: None,
+                },
+                TemplateSection {
+                    title: "Action Items".to_string(),
+                    instruction: "Collect the owners".to_string(),
+                    format: "list".to_string(),
+                    item_format: None,
+                },
+                TemplateSection {
+                    title: "Risks".to_string(),
+                    instruction: "Name the risks".to_string(),
+                    format: "paragraph".to_string(),
+                    item_format: None,
+                },
+            ],
+        };
+
+        let instructions = template.to_section_instructions();
+        let decisions = instructions.find("For the 'Decisions' section").unwrap();
+        let action_items = instructions.find("For the 'Action Items' section").unwrap();
+        let risks = instructions.find("For the 'Risks' section").unwrap();
+        assert!(decisions < action_items);
+        assert!(action_items < risks);
+
+        let skeleton = template.to_markdown_structure();
+        let decisions_heading = skeleton.find("**Decisions**").unwrap();
+        let action_items_heading = skeleton.find("**Action Items**").unwrap();
+        let risks_heading = skeleton.find("**Risks**").unwrap();
+        assert!(decisions_heading < action_items_heading);
+        assert!(action_items_heading < risks_heading);
+    }
 }
