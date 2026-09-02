@@ -17,6 +17,7 @@ import {
   duplicateTemplate,
   getTemplate,
   getTemplateDeletionImpact,
+  getEffectiveTemplate,
   listTemplates,
   migrateLegacyTemplates,
   setGlobalTemplateDefault,
@@ -144,7 +145,11 @@ export const TemplateSettings = forwardRef<TemplateSettingsHandle, TemplateSetti
               description: `${migration.migratedTemplates.length} legacy template${migration.migratedTemplates.length === 1 ? '' : 's'} restored as independent copies.`,
             });
           }
-          if (active) await refreshCatalog();
+          const effective = await getEffectiveTemplate();
+          if (effective.recoveryNotice) {
+            toast.info('Template selection recovered', { description: effective.recoveryNotice });
+          }
+          if (active) await refreshCatalog(effective.id);
         } catch (loadError) {
           console.error('Failed to load templates:', loadError);
           if (active) setError('Could not load templates. Check local storage and try again.');

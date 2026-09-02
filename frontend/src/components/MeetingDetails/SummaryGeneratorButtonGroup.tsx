@@ -32,7 +32,8 @@ interface SummaryGeneratorButtonGroupProps {
   availableTemplates: TemplateDescriptor[];
   meetingTemplateOverrideId: string | null;
   globalDefaultName: string;
-  onTemplateSelect: (templateId: string | null, templateName: string) => void;
+  onTemplateSelect: (templateId: string | null, templateName: string) => Promise<void>;
+  isTemplateSelectionPending: boolean;
   hasTranscripts?: boolean;
   hasSummary?: boolean;
   isModelConfigLoading?: boolean;
@@ -51,6 +52,7 @@ export function SummaryGeneratorButtonGroup({
   meetingTemplateOverrideId,
   globalDefaultName,
   onTemplateSelect,
+  isTemplateSelectionPending,
   hasTranscripts = true,
   hasSummary = false,
   isModelConfigLoading = false,
@@ -266,16 +268,18 @@ export function SummaryGeneratorButtonGroup({
             Analytics.trackButtonClick('generate_summary', 'meeting_details');
             checkOllamaModelsAndGenerate();
           }}
-          disabled={isCheckingModels || isModelConfigLoading}
+          disabled={isCheckingModels || isModelConfigLoading || isTemplateSelectionPending}
           title={
             isModelConfigLoading
               ? 'Loading model configuration...'
               : isCheckingModels
                 ? 'Checking models...'
+                : isTemplateSelectionPending
+                  ? 'Saving template selection...'
                 : hasSummary ? 'Regenerate AI Summary' : 'Generate AI Summary'
           }
         >
-          {isCheckingModels || isModelConfigLoading ? (
+          {isCheckingModels || isModelConfigLoading || isTemplateSelectionPending ? (
             <>
               <Loader2 className="animate-spin xl:mr-2" size={18} />
               <span className="hidden xl:inline">Processing...</span>
@@ -327,6 +331,7 @@ export function SummaryGeneratorButtonGroup({
         meetingOverrideId={meetingTemplateOverrideId}
         globalDefaultName={globalDefaultName}
         onSelect={onTemplateSelect}
+        disabled={isTemplateSelectionPending}
       />
     </ButtonGroup>
   );

@@ -66,6 +66,16 @@ describe('TemplateSettings', () => {
       if (command === 'api_migrate_legacy_templates') {
         return Promise.resolve({ migratedTemplates: [] });
       }
+      if (command === 'api_get_effective_template') {
+        const selected = catalog.find((template) => template.isGlobalDefault) ?? catalog[0];
+        return Promise.resolve({
+          id: selected?.id ?? 'standard_meeting',
+          name: selected?.name ?? 'Standard Meeting Notes',
+          meetingOverrideId: null,
+          inherited: true,
+          recoveryNotice: null,
+        });
+      }
       if (command === 'api_list_templates') {
         return Promise.resolve([...catalog]);
       }
@@ -157,6 +167,7 @@ describe('TemplateSettings', () => {
   it('shows a create-first empty state when no templates exist', async () => {
     invoke.mockImplementation((command: string) => {
       if (command === 'api_migrate_legacy_templates') return Promise.resolve({ migratedTemplates: [] });
+      if (command === 'api_get_effective_template') return Promise.resolve({ id: 'standard_meeting' });
       if (command === 'api_list_templates') return Promise.resolve([]);
       throw new Error(`Unexpected command: ${command}`);
     });
@@ -178,6 +189,48 @@ describe('TemplateSettings', () => {
     );
     expect(await screen.findByDisplayValue('Standard Meeting Notes')).toBeDisabled();
     expect(screen.getByLabelText('Section 1 output style')).toBeDisabled();
+  });
+
+  it('recovers a missing global default before selecting the catalog', async () => {
+    catalog = catalog.map((template) => ({ ...template, isGlobalDefault: false }));
+    invoke.mockImplementation((command: string, args?: any) => {
+      if (command === 'api_migrate_legacy_templates') return Promise.resolve({ migratedTemplates: [] });
+      if (command === 'api_get_effective_template') {
+        catalog = catalog.map((template) => ({
+          ...template,
+          isGlobalDefault: template.id === 'standard_meeting',
+        }));
+        return Promise.resolve({
+          id: 'standard_meeting',
+          name: 'Standard Meeting Notes',
+          meetingOverrideId: null,
+          inherited: true,
+          recoveryNotice: 'The saved global template was unavailable, so Standard Meeting was restored.',
+        });
+      }
+      if (command === 'api_list_templates') return Promise.resolve([...catalog]);
+      if (command === 'api_get_template_details') {
+        const descriptor = catalog.find((template) => template.id === args?.templateId);
+        return Promise.resolve({
+          id: args?.templateId,
+          name: descriptor?.name ?? 'Unknown',
+          description: descriptor?.description ?? '',
+          origin: descriptor?.origin ?? 'custom',
+          sections: [{ ...baseSection }],
+        });
+      }
+      throw new Error(`Unexpected command: ${command}`);
+    });
+    render(<TemplateSettings />);
+
+    expect(await screen.findByRole('button', { name: /Standard Meeting Notes.*Default/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(toast.info).toHaveBeenCalledWith(
+      'Template selection recovered',
+      expect.objectContaining({ description: expect.stringContaining('Standard Meeting') }),
+    );
   });
 
   it('renders a persistence failure as an accessible error', async () => {
@@ -465,6 +518,9 @@ describe('TemplateSettings', () => {
     invoke.mockImplementation((command: string, args?: any) => {
       if (command === 'api_migrate_legacy_templates') {
         return Promise.resolve({ migratedTemplates: [{ id: 'migrated_standup' }] });
+      }
+      if (command === 'api_get_effective_template') {
+        return Promise.resolve({ id: 'standard_meeting', recoveryNotice: null });
       }
       if (command === 'api_list_templates') return Promise.resolve([...catalog]);
       if (command === 'api_get_template_details') {

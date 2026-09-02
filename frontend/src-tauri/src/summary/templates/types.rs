@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 
 /// Represents a single section in a meeting template
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TemplateSection {
     /// Section title (e.g., "Summary", "Action Items")
     pub title: String,
@@ -14,12 +14,34 @@ pub struct TemplateSection {
     pub format: String,
 
     /// Optional markdown formatting hint for list items (e.g., table structure)
-    #[serde(
-        default,
-        alias = "example_item_format",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub item_format: Option<String>,
+}
+
+impl<'de> Deserialize<'de> for TemplateSection {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct TemplateSectionFields {
+            title: String,
+            instruction: String,
+            format: String,
+            #[serde(default)]
+            item_format: Option<String>,
+            #[serde(default)]
+            example_item_format: Option<String>,
+        }
+
+        let fields = TemplateSectionFields::deserialize(deserializer)?;
+        Ok(Self {
+            title: fields.title,
+            instruction: fields.instruction,
+            format: fields.format,
+            item_format: fields.item_format.or(fields.example_item_format),
+        })
+    }
 }
 
 /// Represents a complete meeting template
@@ -190,6 +212,31 @@ mod tests {
         let saved = serde_json::to_value(template).unwrap();
         assert_eq!(saved["sections"][2]["item_format"], "YYYY-MM-DD");
         assert!(saved["sections"][2].get("example_item_format").is_none());
+    }
+
+    #[test]
+    fn canonical_pattern_wins_when_both_legacy_fields_are_present() {
+        let json = r#"{
+            "name": "Compatible Template",
+            "description": "Supports legacy output patterns",
+            "sections": [{
+                "title": "Items",
+                "instruction": "Capture items",
+                "format": "list",
+                "item_format": "canonical pattern",
+                "example_item_format": "legacy pattern"
+            }]
+        }"#;
+
+        let template: Template = serde_json::from_str(json).unwrap();
+
+        assert_eq!(
+            template.sections[0].item_format.as_deref(),
+            Some("canonical pattern")
+        );
+        let saved = serde_json::to_value(template).unwrap();
+        assert_eq!(saved["sections"][0]["item_format"], "canonical pattern");
+        assert!(saved["sections"][0].get("example_item_format").is_none());
     }
 
     #[test]

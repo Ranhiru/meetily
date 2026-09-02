@@ -46,6 +46,12 @@ pub struct EffectiveTemplate {
     pub recovery_notice: Option<String>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GenerationTemplate {
+    pub id: String,
+    pub recovery_notice: Option<String>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DeleteImpact {
@@ -315,6 +321,26 @@ impl TemplateManagementService {
         })
     }
 
+    pub async fn resolve_for_generation(
+        &self,
+        meeting_id: &str,
+        requested_template_id: Option<&str>,
+    ) -> Result<GenerationTemplate, String> {
+        let effective = self.resolve_effective(Some(meeting_id)).await?;
+        let Some(requested_template_id) = requested_template_id else {
+            return Ok(GenerationTemplate {
+                id: effective.id,
+                recovery_notice: effective.recovery_notice,
+            });
+        };
+
+        self.get(requested_template_id).await?;
+        Ok(GenerationTemplate {
+            id: requested_template_id.to_string(),
+            recovery_notice: effective.recovery_notice,
+        })
+    }
+
     pub async fn deletion_impact(&self, id: &str) -> Result<DeleteImpact, String> {
         let template = self.get(id).await?;
         if template.origin != TemplateOrigin::Custom {
@@ -396,6 +422,15 @@ impl TemplateManagementService {
             legacy.name = self.unique_name(&legacy.name).await?;
             let migrated = self.create(legacy).await?;
 
+            let mut transaction = match self.pool.begin().await {
+                Ok(transaction) => transaction,
+                Err(error) => {
+                    let _ = std::fs::remove_file(self.custom_template_path(&migrated.id)?);
+                    return Err(format!(
+                        "Failed to begin legacy template migration: {error}"
+                    ));
+                }
+            };
             let rewire_result: Result<(), sqlx::Error> = async {
                 sqlx::query(
                     "UPDATE template_preferences SET global_default_id = ?
@@ -403,22 +438,28 @@ impl TemplateManagementService {
                 )
                 .bind(&migrated.id)
                 .bind(builtin_id)
-                .execute(&self.pool)
+                .execute(&mut *transaction)
                 .await?;
                 sqlx::query(
                     "UPDATE meetings SET template_override_id = ? WHERE template_override_id = ?",
                 )
                 .bind(&migrated.id)
                 .bind(builtin_id)
-                .execute(&self.pool)
+                .execute(&mut *transaction)
                 .await?;
                 Ok(())
             }
             .await;
             if let Err(error) = rewire_result {
+                let _ = transaction.rollback().await;
                 let _ = std::fs::remove_file(self.custom_template_path(&migrated.id)?);
                 return Err(format!(
                     "Failed to migrate legacy template references: {error}"
+                ));
+            }
+            if let Err(error) = transaction.commit().await {
+                return Err(format!(
+                    "Failed to commit legacy template migration: {error}"
                 ));
             }
             std::fs::remove_file(&legacy_path)
@@ -800,5 +841,59 @@ mod tests {
         .await
         .unwrap();
         assert!(stored_override.is_none());
+    }
+
+    #[tokio::test]
+    async fn generation_honors_a_requested_template_over_a_stale_override() {
+        let (_temp, service) = service().await;
+        sqlx::query(
+            "INSERT INTO meetings (id, title, created_at, updated_at, template_override_id)
+             VALUES ('meeting-1', 'Meeting 1', '2026-01-01', '2026-01-01', 'daily_standup')",
+        )
+        .execute(&service.pool)
+        .await
+        .unwrap();
+
+        let selected = service
+            .resolve_for_generation("meeting-1", Some(STANDARD_MEETING_ID))
+            .await
+            .unwrap();
+
+        assert_eq!(selected.id, STANDARD_MEETING_ID);
+    }
+
+    #[tokio::test]
+    async fn migration_rolls_back_references_when_meeting_rewire_fails() {
+        let (temp, service) = service().await;
+        std::fs::write(
+            temp.path().join("standard_meeting.json"),
+            serde_json::to_vec_pretty(&valid_template("Legacy Standard")).unwrap(),
+        )
+        .unwrap();
+        sqlx::query(
+            "INSERT INTO meetings (id, title, created_at, updated_at, template_override_id)
+             VALUES ('meeting-1', 'Meeting 1', '2026-01-01', '2026-01-01', 'standard_meeting')",
+        )
+        .execute(&service.pool)
+        .await
+        .unwrap();
+        sqlx::query(
+            "CREATE TRIGGER reject_legacy_rewire
+             BEFORE UPDATE OF template_override_id ON meetings
+             WHEN OLD.template_override_id = 'standard_meeting'
+             BEGIN SELECT RAISE(ABORT, 'meeting rewire rejected'); END",
+        )
+        .execute(&service.pool)
+        .await
+        .unwrap();
+
+        assert!(service.migrate_legacy_collisions().await.is_err());
+        assert_eq!(service.stored_global_default().await, STANDARD_MEETING_ID);
+        assert!(temp.path().join("standard_meeting.json").exists());
+        assert!(std::fs::read_dir(temp.path()).unwrap().all(|entry| !entry
+            .unwrap()
+            .file_name()
+            .to_string_lossy()
+            .starts_with("custom_")));
     }
 }

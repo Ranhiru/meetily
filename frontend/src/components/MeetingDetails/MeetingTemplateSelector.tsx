@@ -16,7 +16,8 @@ interface MeetingTemplateSelectorProps {
   templates: TemplateDescriptor[];
   meetingOverrideId: string | null;
   globalDefaultName: string;
-  onSelect: (templateId: string | null, templateName: string) => void;
+  onSelect: (templateId: string | null, templateName: string) => Promise<void>;
+  disabled?: boolean;
 }
 
 export function MeetingTemplateSelector({
@@ -24,20 +25,22 @@ export function MeetingTemplateSelector({
   meetingOverrideId,
   globalDefaultName,
   onSelect,
+  disabled = false,
 }: MeetingTemplateSelectorProps) {
   if (templates.length === 0) return null;
 
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" aria-label="Select summary template">
+        <Button variant="outline" size="sm" aria-label="Select summary template" disabled={disabled}>
           <FileText />
           <span className="hidden lg:inline">Template</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
         <DropdownMenuItem
-          onClick={() => onSelect(null, globalDefaultName)}
+          onClick={() => void onSelect(null, globalDefaultName)}
+          disabled={disabled}
           className="flex items-center justify-between gap-2"
         >
           <span>Use global default — {globalDefaultName}</span>
@@ -50,7 +53,8 @@ export function MeetingTemplateSelector({
             {templates.filter((template) => template.origin === origin).map((template) => (
               <DropdownMenuItem
                 key={template.id}
-                onClick={() => onSelect(template.id, template.name)}
+                onClick={() => void onSelect(template.id, template.name)}
+                disabled={disabled}
                 title={template.description}
                 className="flex items-center justify-between gap-2"
               >

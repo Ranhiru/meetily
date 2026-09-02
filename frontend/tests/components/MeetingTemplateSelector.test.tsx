@@ -23,7 +23,7 @@ const templates = [
 describe('MeetingTemplateSelector', () => {
   it('shows inherited and grouped choices and persists an explicit override', async () => {
     const user = userEvent.setup();
-    const onSelect = vi.fn();
+    const onSelect = vi.fn().mockResolvedValue(undefined);
     render(
       <MeetingTemplateSelector
         templates={templates}
@@ -44,7 +44,7 @@ describe('MeetingTemplateSelector', () => {
 
   it('clears an explicit override by selecting the global default', async () => {
     const user = userEvent.setup();
-    const onSelect = vi.fn();
+    const onSelect = vi.fn().mockResolvedValue(undefined);
     render(
       <MeetingTemplateSelector
         templates={templates}
@@ -58,5 +58,24 @@ describe('MeetingTemplateSelector', () => {
     await user.click(screen.getByRole('menuitem', { name: /Use global default/ }));
 
     expect(onSelect).toHaveBeenCalledWith(null, 'Standard Meeting Notes');
+  });
+
+  it('disables template changes while the selection is being saved', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn().mockResolvedValue(undefined);
+    render(
+      <MeetingTemplateSelector
+        templates={templates}
+        meetingOverrideId={null}
+        globalDefaultName="Standard Meeting Notes"
+        onSelect={onSelect}
+        disabled
+      />,
+    );
+
+    const trigger = screen.getByRole('button', { name: 'Select summary template' });
+    expect(trigger).toBeDisabled();
+    await user.click(trigger);
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

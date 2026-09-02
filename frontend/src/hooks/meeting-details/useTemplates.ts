@@ -14,6 +14,7 @@ export function useTemplates(meetingId: string) {
   const [selectedTemplate, setSelectedTemplate] = useState('standard_meeting');
   const [meetingTemplateOverrideId, setMeetingTemplateOverrideId] = useState<string | null>(null);
   const [globalDefaultName, setGlobalDefaultName] = useState('Standard Meeting Notes');
+  const [isTemplateSelectionPending, setIsTemplateSelectionPending] = useState(false);
 
   const refresh = useCallback(async () => {
     try {
@@ -46,6 +47,7 @@ export function useTemplates(meetingId: string) {
     templateId: string | null,
     templateName: string,
   ) => {
+    setIsTemplateSelectionPending(true);
     try {
       const effective = await setMeetingTemplateOverride(meetingId, templateId);
       setSelectedTemplate(effective.id);
@@ -57,6 +59,8 @@ export function useTemplates(meetingId: string) {
     } catch (error) {
       console.error('Failed to save meeting template:', error);
       toast.error('Could not save the meeting template');
+    } finally {
+      setIsTemplateSelectionPending(false);
     }
   }, [meetingId]);
 
@@ -65,6 +69,7 @@ export function useTemplates(meetingId: string) {
     selectedTemplate,
     meetingTemplateOverrideId,
     globalDefaultName,
+    isTemplateSelectionPending,
     handleTemplateSelection,
   };
 }

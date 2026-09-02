@@ -360,7 +360,9 @@ pub async fn api_process_transcript<R: Runtime>(
         pool.clone(),
     );
     let migration = template_service.migrate_legacy_collisions().await?;
-    let effective_template = template_service.resolve_effective(Some(&m_id)).await?;
+    let effective_template = template_service
+        .resolve_for_generation(&m_id, template_id.as_deref())
+        .await?;
     let final_template_id = effective_template.id;
     let mut template_notices = Vec::new();
     if !migration.migrated_templates.is_empty() {
@@ -378,8 +380,6 @@ pub async fn api_process_transcript<R: Runtime>(
         template_notices.push(notice);
     }
     let template_notice = (!template_notices.is_empty()).then(|| template_notices.join(" "));
-    let _ = template_id;
-
     // Normalise empty / whitespace-only to None so "" and null behave identically
     let summary_language = summary_language.and_then(|s| {
         let t = s.trim();

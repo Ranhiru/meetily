@@ -59,7 +59,8 @@ interface SummaryPanelProps {
   availableTemplates: TemplateDescriptor[];
   meetingTemplateOverrideId: string | null;
   globalDefaultName: string;
-  onTemplateSelect: (templateId: string | null, templateName: string) => void;
+  onTemplateSelect: (templateId: string | null, templateName: string) => Promise<void>;
+  isTemplateSelectionPending: boolean;
   isModelConfigLoading?: boolean;
   onOpenModelSettings?: (openFn: () => void) => void;
 }
@@ -97,6 +98,7 @@ export function SummaryPanel({
   meetingTemplateOverrideId,
   globalDefaultName,
   onTemplateSelect,
+  isTemplateSelectionPending,
   isModelConfigLoading = false,
   onOpenModelSettings
 }: SummaryPanelProps) {
@@ -284,6 +286,7 @@ export function SummaryPanel({
                 meetingTemplateOverrideId={meetingTemplateOverrideId}
                 globalDefaultName={globalDefaultName}
                 onTemplateSelect={onTemplateSelect}
+                isTemplateSelectionPending={isTemplateSelectionPending}
                 hasTranscripts={transcripts.length > 0}
                 hasSummary={!!aiSummary}
                 isModelConfigLoading={isModelConfigLoading}
@@ -327,6 +330,7 @@ export function SummaryPanel({
               meetingTemplateOverrideId={meetingTemplateOverrideId}
               globalDefaultName={globalDefaultName}
               onTemplateSelect={onTemplateSelect}
+              isTemplateSelectionPending={isTemplateSelectionPending}
               hasTranscripts={transcripts.length > 0}
               isModelConfigLoading={isModelConfigLoading}
               onOpenModelSettings={onOpenModelSettings}
@@ -356,6 +360,7 @@ export function SummaryPanel({
               meetingTemplateOverrideId={meetingTemplateOverrideId}
               globalDefaultName={globalDefaultName}
               onTemplateSelect={onTemplateSelect}
+              isTemplateSelectionPending={isTemplateSelectionPending}
               hasTranscripts={transcripts.length > 0}
               hasSummary={false}
               isModelConfigLoading={isModelConfigLoading}
@@ -367,7 +372,7 @@ export function SummaryPanel({
           <EmptyStateSummary
             onGenerate={() => onGenerateSummary(customPrompt)}
             hasModel={modelConfig.provider !== null && modelConfig.model !== null}
-            isGenerating={isSummaryLoading}
+            isGenerating={isSummaryLoading || isTemplateSelectionPending}
           />
         </div>
       ) : transcripts?.length > 0 && (

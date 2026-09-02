@@ -225,6 +225,7 @@ export default function PageContent({
           meetingTemplateOverrideId={templates.meetingTemplateOverrideId}
           globalDefaultName={templates.globalDefaultName}
           onTemplateSelect={templates.handleTemplateSelection}
+          isTemplateSelectionPending={templates.isTemplateSelectionPending}
           isModelConfigLoading={false}
           onOpenModelSettings={handleRegisterModalOpen}
         />
