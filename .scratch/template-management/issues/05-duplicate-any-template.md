@@ -4,14 +4,14 @@
 
 **Blocked by:** 02: Create a custom template.
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] Duplicate is available from both built-in and custom template actions.
-- [ ] The duplicate receives a newly generated immutable internal ID and is stored as a custom template.
-- [ ] Name, description, ordered sections, instructions, output styles, and output patterns are copied exactly.
-- [ ] The suggested visible name is unique case-insensitively and uses a predictable Copy, Copy 2, and later suffix sequence.
-- [ ] The duplicate has no link to its source and does not receive later source-template updates.
-- [ ] Editing or deleting the duplicate cannot alter the source template.
-- [ ] Creating a duplicate does not make it the global default.
-- [ ] The new custom template appears in the correct alphabetical position and becomes selected for inspection or editing.
-- [ ] Rust integration tests cover both origins, independent identity, complete field preservation, and collision naming; rendered tests cover both duplicate actions and resulting state.
+- [x] Duplicate is available from both built-in and custom template actions.
+- [x] The duplicate receives a newly generated immutable internal ID and is stored as a custom template.
+- [x] Name, description, ordered sections, instructions, output styles, and output patterns are copied exactly.
+- [x] The suggested visible name is unique case-insensitively and uses a predictable Copy, Copy 2, and later suffix sequence.
+- [x] The duplicate has no link to its source and does not receive later source-template updates.
+- [x] Editing or deleting the duplicate cannot alter the source template.
+- [x] Creating a duplicate does not make it the global default.
+- [x] The new custom template appears in the correct alphabetical position and becomes selected for inspection or editing.
+- [x] Rust integration tests cover both origins, independent identity, complete field preservation, and collision naming; rendered tests cover both duplicate actions and resulting state.
