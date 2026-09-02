@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TemplateSettings, type TemplateSettingsHandle } from '@/components/TemplateSettings';
+import { toast } from 'sonner';
 
 const { invoke } = vi.hoisted(() => ({ invoke: vi.fn() }));
 let catalog: Array<Record<string, unknown>>;
@@ -10,6 +11,9 @@ let customDetails: Record<string, unknown>;
 let deleteImpact: Record<string, unknown>;
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke }));
+vi.mock('sonner', () => ({
+  toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() },
+}));
 
 const baseSection = {
   title: 'Summary',
@@ -125,6 +129,13 @@ describe('TemplateSettings', () => {
       }
       if (command === 'api_get_template_deletion_impact') {
         return Promise.resolve(deleteImpact);
+      }
+      if (command === 'api_set_global_template_default') {
+        catalog = catalog.map((template) => ({
+          ...template,
+          isGlobalDefault: template.id === args?.templateId,
+        }));
+        return Promise.resolve(catalog.find((template) => template.id === args?.templateId));
       }
       if (command === 'api_delete_template') {
         catalog = catalog.filter((template) => template.id !== args?.templateId);
@@ -332,7 +343,18 @@ describe('TemplateSettings', () => {
     });
     expect(dialog).toHaveTextContent('2 meetings explicitly reference this template');
     expect(dialog).not.toHaveTextContent('The global default will return to Standard Meeting.');
-    await user.click(within(dialog).getByRole('button', { name: 'Delete permanently' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(
+      screen.queryByRole('alertdialog', { name: 'Permanently delete this template?' }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'My Retro' })).toBeInTheDocument();
+    expect(invoke).not.toHaveBeenCalledWith('api_delete_template', expect.anything());
+
+    await user.click(screen.getByRole('button', { name: 'Delete' }));
+    const confirmDialog = await screen.findByRole('alertdialog', {
+      name: 'Permanently delete this template?',
+    });
+    await user.click(within(confirmDialog).getByRole('button', { name: 'Delete permanently' }));
 
     expect(invoke).toHaveBeenCalledWith('api_delete_template', { templateId: 'custom_retro' });
     await waitFor(() => {
@@ -419,6 +441,53 @@ describe('TemplateSettings', () => {
     const secondDialog = await screen.findByRole('dialog', { name: 'Save template changes?' });
     await user.click(within(secondDialog).getByRole('button', { name: 'Discard and continue' }));
     await expect(second).resolves.toBe(true);
+  });
+
+  it('sets a selected template as the global default and moves the marker', async () => {
+    const user = userEvent.setup();
+    render(<TemplateSettings />);
+    await screen.findByDisplayValue('Standard Meeting Notes');
+
+    await user.click(screen.getByRole('button', { name: 'Daily Standup' }));
+    await user.click(await screen.findByRole('button', { name: 'Set as default' }));
+
+    expect(invoke).toHaveBeenCalledWith('api_set_global_template_default', {
+      templateId: 'daily_standup',
+    });
+    expect(await screen.findByRole('button', { name: /Daily Standup.*Default/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Standard Meeting Notes' })).toBeInTheDocument();
+  });
+
+  it('announces recovered legacy templates as a visible notice on load', async () => {
+    invoke.mockImplementation((command: string, args?: any) => {
+      if (command === 'api_migrate_legacy_templates') {
+        return Promise.resolve({ migratedTemplates: [{ id: 'migrated_standup' }] });
+      }
+      if (command === 'api_list_templates') return Promise.resolve([...catalog]);
+      if (command === 'api_get_template_details') {
+        const descriptor = catalog.find((template) => template.id === args?.templateId);
+        return Promise.resolve({
+          id: args?.templateId,
+          name: descriptor?.name ?? 'Unknown',
+          description: descriptor?.description ?? '',
+          origin: descriptor?.origin ?? 'custom',
+          sections: [{ ...baseSection }],
+        });
+      }
+      throw new Error(`Unexpected command: ${command}`);
+    });
+    render(<TemplateSettings />);
+
+    await screen.findByRole('heading', { name: 'Built-in' });
+    expect(toast.info).toHaveBeenCalledWith(
+      'Custom templates recovered',
+      expect.objectContaining({
+        description: '1 legacy template restored as independent copies.',
+      }),
+    );
   });
 
   it('reorders sections via keyboard and protects the final section', async () => {
