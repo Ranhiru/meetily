@@ -532,31 +532,8 @@ mod tests {
     async fn service() -> (TempDir, TemplateManagementService) {
         let temp = tempfile::tempdir().unwrap();
         let pool = SqlitePool::connect("sqlite::memory:").await.unwrap();
-        sqlx::query(
-            "CREATE TABLE template_preferences (
-                id INTEGER PRIMARY KEY,
-                global_default_id TEXT NOT NULL
-            )",
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        sqlx::query(
-            "INSERT INTO template_preferences (id, global_default_id)
-             VALUES (1, 'standard_meeting')",
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
-        sqlx::query(
-            "CREATE TABLE meetings (
-                id TEXT PRIMARY KEY,
-                template_override_id TEXT
-            )",
-        )
-        .execute(&pool)
-        .await
-        .unwrap();
+        // Run the real migration set so tests fail if the schema drifts.
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
         let service = TemplateManagementService::new(temp.path().to_path_buf(), pool);
         (temp, service)
     }
@@ -638,7 +615,7 @@ mod tests {
     #[tokio::test]
     async fn durable_global_default_and_meeting_override_resolve_with_correct_precedence() {
         let (_temp, service) = service().await;
-        sqlx::query("INSERT INTO meetings (id) VALUES ('meeting-1'), ('meeting-2')")
+        sqlx::query("INSERT INTO meetings (id, title, created_at, updated_at) VALUES ('meeting-1', 'Meeting 1', '2026-01-01', '2026-01-01'), ('meeting-2', 'Meeting 2', '2026-01-01', '2026-01-01')")
             .execute(&service.pool)
             .await
             .unwrap();
@@ -681,7 +658,7 @@ mod tests {
     #[tokio::test]
     async fn deletion_reports_impact_and_clears_defaults_and_overrides() {
         let (_temp, service) = service().await;
-        sqlx::query("INSERT INTO meetings (id) VALUES ('meeting-1'), ('meeting-2')")
+        sqlx::query("INSERT INTO meetings (id, title, created_at, updated_at) VALUES ('meeting-1', 'Meeting 1', '2026-01-01', '2026-01-01'), ('meeting-2', 'Meeting 2', '2026-01-01', '2026-01-01')")
             .execute(&service.pool)
             .await
             .unwrap();
@@ -785,7 +762,8 @@ mod tests {
     async fn dangling_references_are_repaired_before_generation() {
         let (_temp, service) = service().await;
         sqlx::query(
-            "INSERT INTO meetings (id, template_override_id) VALUES ('meeting-1', 'missing')",
+            "INSERT INTO meetings (id, title, created_at, updated_at, template_override_id)
+             VALUES ('meeting-1', 'Meeting 1', '2026-01-01', '2026-01-01', 'missing')",
         )
         .execute(&service.pool)
         .await
