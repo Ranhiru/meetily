@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 /// Represents a single section in a meeting template
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -13,12 +14,12 @@ pub struct TemplateSection {
     pub format: String,
 
     /// Optional markdown formatting hint for list items (e.g., table structure)
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        alias = "example_item_format",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub item_format: Option<String>,
-
-    /// Alternative formatting hint
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub example_item_format: Option<String>,
 }
 
 /// Represents a complete meeting template
@@ -37,11 +38,11 @@ pub struct Template {
 impl Template {
     /// Validates the template structure
     pub fn validate(&self) -> Result<(), String> {
-        if self.name.is_empty() {
+        if self.name.trim().is_empty() {
             return Err("Template name cannot be empty".to_string());
         }
 
-        if self.description.is_empty() {
+        if self.description.trim().is_empty() {
             return Err("Template description cannot be empty".to_string());
         }
 
@@ -49,12 +50,13 @@ impl Template {
             return Err("Template must have at least one section".to_string());
         }
 
+        let mut section_titles = HashSet::new();
         for (i, section) in self.sections.iter().enumerate() {
-            if section.title.is_empty() {
+            if section.title.trim().is_empty() {
                 return Err(format!("Section {} has empty title", i));
             }
 
-            if section.instruction.is_empty() {
+            if section.instruction.trim().is_empty() {
                 return Err(format!("Section '{}' has empty instruction", section.title));
             }
 
@@ -64,6 +66,10 @@ impl Template {
                     "Section '{}' has invalid format '{}'. Must be 'paragraph', 'list', or 'string'",
                     section.title, other
                 )),
+            }
+
+            if !section_titles.insert(section.title.trim().to_lowercase()) {
+                return Err(format!("Section title '{}' must be unique", section.title));
             }
         }
 
@@ -93,11 +99,17 @@ impl Template {
                 section.title, section.instruction
             ));
 
-            // Add item format instructions if present
-            let item_format = section.item_format.as_ref()
-                .or(section.example_item_format.as_ref());
+            let style_instruction = match section.format.as_str() {
+                "paragraph" => "Write cohesive prose.",
+                "list" => "Use list-oriented content.",
+                "string" => "Return one concise value.",
+                _ => "",
+            };
+            if !style_instruction.is_empty() {
+                instructions.push_str(&format!("  - {style_instruction}\n"));
+            }
 
-            if let Some(format) = item_format {
+            if let Some(format) = section.item_format.as_ref() {
                 instructions.push_str(&format!(
                     "  - Items in this section should follow the format: `{}`.\n",
                     format
@@ -118,15 +130,12 @@ mod tests {
         let template = Template {
             name: "Test Template".to_string(),
             description: "A test template".to_string(),
-            sections: vec![
-                TemplateSection {
-                    title: "Summary".to_string(),
-                    instruction: "Provide a summary".to_string(),
-                    format: "paragraph".to_string(),
-                    item_format: None,
-                    example_item_format: None,
-                },
-            ],
+            sections: vec![TemplateSection {
+                title: "Summary".to_string(),
+                instruction: "Provide a summary".to_string(),
+                format: "paragraph".to_string(),
+                item_format: None,
+            }],
         };
 
         assert!(template.validate().is_ok());
@@ -148,17 +157,38 @@ mod tests {
         let template = Template {
             name: "Test".to_string(),
             description: "Test".to_string(),
-            sections: vec![
-                TemplateSection {
-                    title: "Test".to_string(),
-                    instruction: "Test".to_string(),
-                    format: "invalid".to_string(),
-                    item_format: None,
-                    example_item_format: None,
-                },
-            ],
+            sections: vec![TemplateSection {
+                title: "Test".to_string(),
+                instruction: "Test".to_string(),
+                format: "invalid".to_string(),
+                item_format: None,
+            }],
         };
 
         assert!(template.validate().is_err());
+    }
+
+    #[test]
+    fn output_styles_and_legacy_patterns_shape_generation_instructions() {
+        let json = r#"{
+            "name": "Style Test",
+            "description": "Checks prompt semantics",
+            "sections": [
+                {"title":"Narrative","instruction":"Explain it","format":"paragraph"},
+                {"title":"Items","instruction":"Capture them","format":"list"},
+                {"title":"Date","instruction":"Record it","format":"string","example_item_format":"YYYY-MM-DD"}
+            ]
+        }"#;
+        let template: Template = serde_json::from_str(json).unwrap();
+
+        let instructions = template.to_section_instructions();
+        assert!(instructions.contains("cohesive prose"));
+        assert!(instructions.contains("list-oriented content"));
+        assert!(instructions.contains("one concise value"));
+        assert!(instructions.contains("YYYY-MM-DD"));
+
+        let saved = serde_json::to_value(template).unwrap();
+        assert_eq!(saved["sections"][2]["item_format"], "YYYY-MM-DD");
+        assert!(saved["sections"][2].get("example_item_format").is_none());
     }
 }

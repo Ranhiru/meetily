@@ -60,14 +60,6 @@ pub use commands::{
     api_save_meeting_summary_language,
 };
 
-// Re-export template commands
-pub use template_commands::{
-    __cmd__api_get_template_details, __cmd__api_list_templates, __cmd__api_validate_template,
-    __tauri_command_name_api_get_template_details, __tauri_command_name_api_list_templates,
-    __tauri_command_name_api_validate_template,
-    api_get_template_details, api_list_templates, api_validate_template,
-};
-
 // Re-export commonly used items
 pub use llm_client::LLMProvider;
 pub use processor::{
