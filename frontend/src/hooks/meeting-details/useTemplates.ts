@@ -1,46 +1,70 @@
-import { useState, useEffect, useCallback } from 'react';
-import { invoke as invokeTauri } from '@tauri-apps/api/core';
+import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import Analytics from '@/lib/analytics';
+import {
+  getEffectiveTemplate,
+  listTemplates,
+  setMeetingTemplateOverride,
+  TEMPLATE_CATALOG_CHANGED_EVENT,
+} from '@/services/templateService';
+import type { TemplateDescriptor } from '@/types/templates';
 
-export function useTemplates() {
-  const [availableTemplates, setAvailableTemplates] = useState<Array<{
-    id: string;
-    name: string;
-    description: string;
-  }>>([]);
-  const [selectedTemplate, setSelectedTemplate] = useState<string>('standard_meeting');
+export function useTemplates(meetingId: string) {
+  const [availableTemplates, setAvailableTemplates] = useState<TemplateDescriptor[]>([]);
+  const [selectedTemplate, setSelectedTemplate] = useState('standard_meeting');
+  const [meetingTemplateOverrideId, setMeetingTemplateOverrideId] = useState<string | null>(null);
+  const [globalDefaultName, setGlobalDefaultName] = useState('Standard Meeting Notes');
 
-  // Fetch available templates on mount
-  useEffect(() => {
-    const fetchTemplates = async () => {
-      try {
-        const templates = await invokeTauri('api_list_templates') as Array<{
-          id: string;
-          name: string;
-          description: string;
-        }>;
-        console.log('Available templates:', templates);
-        setAvailableTemplates(templates);
-      } catch (error) {
-        console.error('Failed to fetch templates:', error);
+  const refresh = useCallback(async () => {
+    try {
+      const [templates, effective] = await Promise.all([
+        listTemplates(),
+        getEffectiveTemplate(meetingId),
+      ]);
+      setAvailableTemplates(templates);
+      setSelectedTemplate(effective.id);
+      setMeetingTemplateOverrideId(effective.meetingOverrideId);
+      setGlobalDefaultName(
+        templates.find((template) => template.isGlobalDefault)?.name ?? effective.name,
+      );
+      if (effective.recoveryNotice) {
+        toast.info('Template selection recovered', { description: effective.recoveryNotice });
       }
-    };
-    fetchTemplates();
-  }, []);
+    } catch (error) {
+      console.error('Failed to fetch templates:', error);
+      toast.error('Could not load template selection');
+    }
+  }, [meetingId]);
 
-  // Handle template selection
-  const handleTemplateSelection = useCallback((templateId: string, templateName: string) => {
-    setSelectedTemplate(templateId);
-    toast.success('Template selected', {
-      description: `Using "${templateName}" template for summary generation`,
-    });
-    Analytics.trackFeatureUsed('template_selected');
-  }, []);
+  useEffect(() => {
+    void refresh();
+    window.addEventListener(TEMPLATE_CATALOG_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(TEMPLATE_CATALOG_CHANGED_EVENT, refresh);
+  }, [refresh]);
+
+  const handleTemplateSelection = useCallback(async (
+    templateId: string | null,
+    templateName: string,
+  ) => {
+    try {
+      const effective = await setMeetingTemplateOverride(meetingId, templateId);
+      setSelectedTemplate(effective.id);
+      setMeetingTemplateOverrideId(effective.meetingOverrideId);
+      toast.success('Template selected', {
+        description: templateId ? `Using "${templateName}" for this meeting` : `Following the global default: ${effective.name}`,
+      });
+      Analytics.trackFeatureUsed('template_selected');
+    } catch (error) {
+      console.error('Failed to save meeting template:', error);
+      toast.error('Could not save the meeting template');
+    }
+  }, [meetingId]);
 
   return {
     availableTemplates,
     selectedTemplate,
+    meetingTemplateOverrideId,
+    globalDefaultName,
     handleTemplateSelection,
   };
 }

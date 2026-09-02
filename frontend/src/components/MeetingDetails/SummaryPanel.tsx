@@ -21,6 +21,7 @@ import {
   saveMeetingSummaryLanguage,
   SummaryLanguageStorage,
 } from '@/lib/summary-language-preferences';
+import type { TemplateDescriptor } from '@/types/templates';
 
 interface SummaryPanelProps {
   meeting: {
@@ -55,9 +56,10 @@ interface SummaryPanelProps {
   summaryError: string | null;
   onRegenerateSummary: () => Promise<void>;
   getSummaryStatusMessage: (status: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error') => string;
-  availableTemplates: Array<{ id: string, name: string, description: string }>;
-  selectedTemplate: string;
-  onTemplateSelect: (templateId: string, templateName: string) => void;
+  availableTemplates: TemplateDescriptor[];
+  meetingTemplateOverrideId: string | null;
+  globalDefaultName: string;
+  onTemplateSelect: (templateId: string | null, templateName: string) => void;
   isModelConfigLoading?: boolean;
   onOpenModelSettings?: (openFn: () => void) => void;
 }
@@ -92,7 +94,8 @@ export function SummaryPanel({
   onRegenerateSummary,
   getSummaryStatusMessage,
   availableTemplates,
-  selectedTemplate,
+  meetingTemplateOverrideId,
+  globalDefaultName,
   onTemplateSelect,
   isModelConfigLoading = false,
   onOpenModelSettings
@@ -278,7 +281,8 @@ export function SummaryPanel({
                 customPrompt={customPrompt}
                 summaryStatus={summaryStatus}
                 availableTemplates={availableTemplates}
-                selectedTemplate={selectedTemplate}
+                meetingTemplateOverrideId={meetingTemplateOverrideId}
+                globalDefaultName={globalDefaultName}
                 onTemplateSelect={onTemplateSelect}
                 hasTranscripts={transcripts.length > 0}
                 hasSummary={!!aiSummary}
@@ -320,7 +324,8 @@ export function SummaryPanel({
               customPrompt={customPrompt}
               summaryStatus={summaryStatus}
               availableTemplates={availableTemplates}
-              selectedTemplate={selectedTemplate}
+              meetingTemplateOverrideId={meetingTemplateOverrideId}
+              globalDefaultName={globalDefaultName}
               onTemplateSelect={onTemplateSelect}
               hasTranscripts={transcripts.length > 0}
               isModelConfigLoading={isModelConfigLoading}
@@ -348,7 +353,8 @@ export function SummaryPanel({
               customPrompt={customPrompt}
               summaryStatus={summaryStatus}
               availableTemplates={availableTemplates}
-              selectedTemplate={selectedTemplate}
+              meetingTemplateOverrideId={meetingTemplateOverrideId}
+              globalDefaultName={globalDefaultName}
               onTemplateSelect={onTemplateSelect}
               hasTranscripts={transcripts.length > 0}
               hasSummary={false}
