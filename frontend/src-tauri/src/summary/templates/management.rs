@@ -258,8 +258,12 @@ impl TemplateManagementService {
         let mut recovery_notices = Vec::new();
         let mut global_default = self.stored_global_default().await;
         if self.get(&global_default).await.is_err() {
+            let missing_default = global_default.clone();
             global_default = STANDARD_MEETING_ID.to_string();
             self.set_global_default(STANDARD_MEETING_ID).await?;
+            log::warn!(
+                "Recovered template global default: '{missing_default}' is unavailable; reset to '{STANDARD_MEETING_ID}'"
+            );
             recovery_notices.push(
                 "The saved global template was unavailable, so Standard Meeting was restored."
                     .to_string(),
@@ -287,6 +291,9 @@ impl TemplateManagementService {
                     .execute(&self.pool)
                     .await
                     .map_err(|error| format!("Failed to recover the meeting template: {error}"))?;
+                log::warn!(
+                    "Recovered meeting '{meeting_id}' template override: '{override_id}' is unavailable; cleared to follow the global default"
+                );
                 meeting_override_id = None;
                 recovery_notices.push(
                     "The meeting template was unavailable, so this meeting now uses the global default."
@@ -416,6 +423,11 @@ impl TemplateManagementService {
             }
             std::fs::remove_file(&legacy_path)
                 .map_err(|error| format!("Failed to finish legacy template migration: {error}"))?;
+            log::info!(
+                "Migrated legacy template '{builtin_id}' to independent custom template '{}' ('{}')",
+                migrated.id,
+                migrated.name
+            );
             migrated_templates.push(migrated);
         }
         Ok(MigrationOutcome { migrated_templates })
