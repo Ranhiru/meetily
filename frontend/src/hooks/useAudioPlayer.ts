@@ -69,7 +69,7 @@ export const useAudioPlayer = (audioPath: string | null): UseAudioPlayerReturn =
       setError(null);
 
       // Create or reuse audio element
-      const audioUrl = convertFileSrc(audioPath);
+      const audioUrl = convertFileSrc(audioPath, 'meetily-audio');
       let audio = audioRef.current;
 
       if (!audio) {
