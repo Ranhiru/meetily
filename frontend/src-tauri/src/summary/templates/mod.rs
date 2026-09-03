@@ -39,13 +39,15 @@
 
 mod defaults;
 mod loader;
+pub mod management;
 mod types;
 
 // Re-export public API
 pub use loader::{
-    get_template, list_template_ids, list_templates, set_bundled_templates_dir,
-    validate_and_parse_template,
+    get_custom_templates_dir, get_template, list_template_ids, list_templates,
+    set_bundled_templates_dir, validate_and_parse_template,
 };
+pub use management::STANDARD_MEETING_ID;
 pub use types::{Template, TemplateSection};
 
 #[cfg(test)]

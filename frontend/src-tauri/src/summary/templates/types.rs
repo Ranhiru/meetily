@@ -1,7 +1,8 @@
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 /// Represents a single section in a meeting template
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct TemplateSection {
     /// Section title (e.g., "Summary", "Action Items")
     pub title: String,
@@ -15,10 +16,32 @@ pub struct TemplateSection {
     /// Optional markdown formatting hint for list items (e.g., table structure)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub item_format: Option<String>,
+}
 
-    /// Alternative formatting hint
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub example_item_format: Option<String>,
+impl<'de> Deserialize<'de> for TemplateSection {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct TemplateSectionFields {
+            title: String,
+            instruction: String,
+            format: String,
+            #[serde(default)]
+            item_format: Option<String>,
+            #[serde(default)]
+            example_item_format: Option<String>,
+        }
+
+        let fields = TemplateSectionFields::deserialize(deserializer)?;
+        Ok(Self {
+            title: fields.title,
+            instruction: fields.instruction,
+            format: fields.format,
+            item_format: fields.item_format.or(fields.example_item_format),
+        })
+    }
 }
 
 /// Represents a complete meeting template
@@ -37,11 +60,11 @@ pub struct Template {
 impl Template {
     /// Validates the template structure
     pub fn validate(&self) -> Result<(), String> {
-        if self.name.is_empty() {
+        if self.name.trim().is_empty() {
             return Err("Template name cannot be empty".to_string());
         }
 
-        if self.description.is_empty() {
+        if self.description.trim().is_empty() {
             return Err("Template description cannot be empty".to_string());
         }
 
@@ -49,12 +72,13 @@ impl Template {
             return Err("Template must have at least one section".to_string());
         }
 
+        let mut section_titles = HashSet::new();
         for (i, section) in self.sections.iter().enumerate() {
-            if section.title.is_empty() {
+            if section.title.trim().is_empty() {
                 return Err(format!("Section {} has empty title", i));
             }
 
-            if section.instruction.is_empty() {
+            if section.instruction.trim().is_empty() {
                 return Err(format!("Section '{}' has empty instruction", section.title));
             }
 
@@ -64,6 +88,10 @@ impl Template {
                     "Section '{}' has invalid format '{}'. Must be 'paragraph', 'list', or 'string'",
                     section.title, other
                 )),
+            }
+
+            if !section_titles.insert(section.title.trim().to_lowercase()) {
+                return Err(format!("Section title '{}' must be unique", section.title));
             }
         }
 
@@ -93,11 +121,17 @@ impl Template {
                 section.title, section.instruction
             ));
 
-            // Add item format instructions if present
-            let item_format = section.item_format.as_ref()
-                .or(section.example_item_format.as_ref());
+            let style_instruction = match section.format.as_str() {
+                "paragraph" => "Write cohesive prose.",
+                "list" => "Use list-oriented content.",
+                "string" => "Return one concise value.",
+                _ => "",
+            };
+            if !style_instruction.is_empty() {
+                instructions.push_str(&format!("  - {style_instruction}\n"));
+            }
 
-            if let Some(format) = item_format {
+            if let Some(format) = section.item_format.as_ref() {
                 instructions.push_str(&format!(
                     "  - Items in this section should follow the format: `{}`.\n",
                     format
@@ -118,15 +152,12 @@ mod tests {
         let template = Template {
             name: "Test Template".to_string(),
             description: "A test template".to_string(),
-            sections: vec![
-                TemplateSection {
-                    title: "Summary".to_string(),
-                    instruction: "Provide a summary".to_string(),
-                    format: "paragraph".to_string(),
-                    item_format: None,
-                    example_item_format: None,
-                },
-            ],
+            sections: vec![TemplateSection {
+                title: "Summary".to_string(),
+                instruction: "Provide a summary".to_string(),
+                format: "paragraph".to_string(),
+                item_format: None,
+            }],
         };
 
         assert!(template.validate().is_ok());
@@ -148,17 +179,105 @@ mod tests {
         let template = Template {
             name: "Test".to_string(),
             description: "Test".to_string(),
+            sections: vec![TemplateSection {
+                title: "Test".to_string(),
+                instruction: "Test".to_string(),
+                format: "invalid".to_string(),
+                item_format: None,
+            }],
+        };
+
+        assert!(template.validate().is_err());
+    }
+
+    #[test]
+    fn output_styles_and_legacy_patterns_shape_generation_instructions() {
+        let json = r#"{
+            "name": "Style Test",
+            "description": "Checks prompt semantics",
+            "sections": [
+                {"title":"Narrative","instruction":"Explain it","format":"paragraph"},
+                {"title":"Items","instruction":"Capture them","format":"list"},
+                {"title":"Date","instruction":"Record it","format":"string","example_item_format":"YYYY-MM-DD"}
+            ]
+        }"#;
+        let template: Template = serde_json::from_str(json).unwrap();
+
+        let instructions = template.to_section_instructions();
+        assert!(instructions.contains("cohesive prose"));
+        assert!(instructions.contains("list-oriented content"));
+        assert!(instructions.contains("one concise value"));
+        assert!(instructions.contains("YYYY-MM-DD"));
+
+        let saved = serde_json::to_value(template).unwrap();
+        assert_eq!(saved["sections"][2]["item_format"], "YYYY-MM-DD");
+        assert!(saved["sections"][2].get("example_item_format").is_none());
+    }
+
+    #[test]
+    fn canonical_pattern_wins_when_both_legacy_fields_are_present() {
+        let json = r#"{
+            "name": "Compatible Template",
+            "description": "Supports legacy output patterns",
+            "sections": [{
+                "title": "Items",
+                "instruction": "Capture items",
+                "format": "list",
+                "item_format": "canonical pattern",
+                "example_item_format": "legacy pattern"
+            }]
+        }"#;
+
+        let template: Template = serde_json::from_str(json).unwrap();
+
+        assert_eq!(
+            template.sections[0].item_format.as_deref(),
+            Some("canonical pattern")
+        );
+        let saved = serde_json::to_value(template).unwrap();
+        assert_eq!(saved["sections"][0]["item_format"], "canonical pattern");
+        assert!(saved["sections"][0].get("example_item_format").is_none());
+    }
+
+    #[test]
+    fn section_order_is_retained_in_prompt_instructions_and_skeleton() {
+        let template = Template {
+            name: "Ordered".to_string(),
+            description: "Order matters".to_string(),
             sections: vec![
                 TemplateSection {
-                    title: "Test".to_string(),
-                    instruction: "Test".to_string(),
-                    format: "invalid".to_string(),
+                    title: "Decisions".to_string(),
+                    instruction: "List the decisions".to_string(),
+                    format: "list".to_string(),
                     item_format: None,
-                    example_item_format: None,
+                },
+                TemplateSection {
+                    title: "Action Items".to_string(),
+                    instruction: "Collect the owners".to_string(),
+                    format: "list".to_string(),
+                    item_format: None,
+                },
+                TemplateSection {
+                    title: "Risks".to_string(),
+                    instruction: "Name the risks".to_string(),
+                    format: "paragraph".to_string(),
+                    item_format: None,
                 },
             ],
         };
 
-        assert!(template.validate().is_err());
+        let instructions = template.to_section_instructions();
+        let decisions = instructions.find("For the 'Decisions' section").unwrap();
+        let action_items = instructions.find("For the 'Action Items' section").unwrap();
+        let risks = instructions.find("For the 'Risks' section").unwrap();
+        assert!(decisions < action_items);
+        assert!(action_items < risks);
+
+        let skeleton = template.to_markdown_structure();
+        let decisions_heading = skeleton.find("**Decisions**").unwrap();
+        let action_items_heading = skeleton.find("**Action Items**").unwrap();
+        let risks_heading = skeleton.find("**Risks**").unwrap();
+        assert!(decisions_heading < action_items_heading);
+        assert!(action_items_heading < risks_heading);
     }
 }

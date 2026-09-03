@@ -12,6 +12,8 @@ use crate::summary::language_detection::{
 };
 use crate::summary::processor::{clean_llm_markdown_detailed, contains_reasoning_marker};
 use crate::summary::service::SummaryService;
+use crate::summary::templates::get_custom_templates_dir;
+use crate::summary::templates::management::TemplateManagementService;
 use log::{error as log_error, info as log_info, warn as log_warn};
 use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
@@ -51,6 +53,7 @@ pub struct SummaryResponse {
 pub struct ProcessTranscriptResponse {
     pub message: String,
     pub process_id: String,
+    pub template_notice: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -484,7 +487,28 @@ pub async fn api_process_transcript<R: Runtime>(
 
     let pool = state.db_manager.pool().clone();
     let final_prompt = custom_prompt.unwrap_or_else(|| "".to_string());
-    let final_template_id = template_id.unwrap_or_else(|| "daily_standup".to_string());
+    let template_service = TemplateManagementService::new(
+        get_custom_templates_dir()
+            .ok_or_else(|| "The local template directory is unavailable".to_string())?,
+        pool.clone(),
+    );
+    let migration = template_service.migrate_legacy_collisions().await?;
+    let effective_template = template_service
+        .resolve_for_generation(&m_id, template_id.as_deref())
+        .await?;
+    let final_template_id = effective_template.id;
+    let mut template_notices = Vec::new();
+    if !migration.migrated_templates.is_empty() {
+        template_notices.push(format!(
+            "Recovered {} legacy custom template{}.",
+            migration.migrated_templates.len(),
+            if migration.migrated_templates.len() == 1 { "" } else { "s" }
+        ));
+    }
+    if let Some(notice) = effective_template.recovery_notice {
+        template_notices.push(notice);
+    }
+    let template_notice = (!template_notices.is_empty()).then(|| template_notices.join(" "));
 
     // Normalise empty / whitespace-only to None so "" and null behave identically
     let summary_language = summary_language.and_then(|s| {
@@ -547,6 +571,7 @@ pub async fn api_process_transcript<R: Runtime>(
     Ok(ProcessTranscriptResponse {
         message: "Summary generation started".to_string(),
         process_id: started_at.to_rfc3339_opts(SecondsFormat::Nanos, true),
+        template_notice,
     })
 }
 

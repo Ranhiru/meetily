@@ -1,9 +1,9 @@
 use super::defaults;
 use super::types::Template;
-use std::path::PathBuf;
-use tracing::{debug, info, warn};
 use once_cell::sync::Lazy;
+use std::path::PathBuf;
 use std::sync::RwLock;
+use tracing::{debug, info, warn};
 
 // Global storage for the bundled templates directory path
 static BUNDLED_TEMPLATES_DIR: Lazy<RwLock<Option<PathBuf>>> = Lazy::new(|| RwLock::new(None));
@@ -22,7 +22,7 @@ pub fn set_bundled_templates_dir(path: PathBuf) {
 /// - macOS: ~/Library/Application Support/Meetily/templates/
 /// - Windows: %APPDATA%\Meetily\templates\
 /// - Linux: ~/.config/Meetily/templates/
-fn get_custom_templates_dir() -> Option<PathBuf> {
+pub fn get_custom_templates_dir() -> Option<PathBuf> {
     let mut path = dirs::data_dir()?;
     path.push("Meetily");
     path.push("templates");
@@ -44,7 +44,10 @@ fn load_bundled_template(template_id: &str) -> Option<String> {
 
     match std::fs::read_to_string(&template_path) {
         Ok(content) => {
-            info!("Loaded bundled template '{}' from {:?}", template_id, template_path);
+            info!(
+                "Loaded bundled template '{}' from {:?}",
+                template_id, template_path
+            );
             Some(content)
         }
         Err(e) => {
@@ -69,7 +72,10 @@ fn load_custom_template(template_id: &str) -> Option<String> {
 
     match std::fs::read_to_string(&template_path) {
         Ok(content) => {
-            info!("Loaded custom template '{}' from {:?}", template_id, template_path);
+            info!(
+                "Loaded custom template '{}' from {:?}",
+                template_id, template_path
+            );
             Some(content)
         }
         Err(e) => {
@@ -95,16 +101,15 @@ fn load_custom_template(template_id: &str) -> Option<String> {
 pub fn get_template(template_id: &str) -> Result<Template, String> {
     info!("Loading template: {}", template_id);
 
-    // Try custom template first, then bundled, then built-in
-    let json_content = if let Some(custom_content) = load_custom_template(template_id) {
-        debug!("Using custom template for '{}'", template_id);
-        custom_content
+    let json_content = if let Some(builtin_content) = defaults::get_builtin_template(template_id) {
+        debug!("Using built-in template for '{}'", template_id);
+        builtin_content.to_string()
     } else if let Some(bundled_content) = load_bundled_template(template_id) {
         debug!("Using bundled template for '{}'", template_id);
         bundled_content
-    } else if let Some(builtin_content) = defaults::get_builtin_template(template_id) {
-        debug!("Using built-in template for '{}'", template_id);
-        builtin_content.to_string()
+    } else if let Some(custom_content) = load_custom_template(template_id) {
+        debug!("Using custom template for '{}'", template_id);
+        custom_content
     } else {
         return Err(format!(
             "Template '{}' not found. Available templates: {}",

@@ -10,15 +10,11 @@ import {
 import { VisuallyHidden } from "@/components/ui/visually-hidden"
 import { Button } from '@/components/ui/button';
 import { ButtonGroup } from '@/components/ui/button-group';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Sparkles, Settings, Loader2, FileText, Check, Square } from 'lucide-react';
+import { Sparkles, Settings, Loader2, Square } from 'lucide-react';
 import Analytics from '@/lib/analytics';
 import { useState, useEffect, ReactNode } from 'react';
+import type { TemplateDescriptor } from '@/types/templates';
+import { MeetingTemplateSelector } from './MeetingTemplateSelector';
 
 interface SummaryGeneratorButtonGroupProps {
   languageSlot?: ReactNode;
@@ -29,9 +25,11 @@ interface SummaryGeneratorButtonGroupProps {
   onStopGeneration: () => void;
   customPrompt: string;
   summaryStatus: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error';
-  availableTemplates: Array<{ id: string, name: string, description: string }>;
-  selectedTemplate: string;
-  onTemplateSelect: (templateId: string, templateName: string) => void;
+  availableTemplates: TemplateDescriptor[];
+  meetingTemplateOverrideId: string | null;
+  globalDefaultName: string;
+  onTemplateSelect: (templateId: string | null, templateName: string) => Promise<void>;
+  isTemplateSelectionPending: boolean;
   hasTranscripts?: boolean;
   hasSummary?: boolean;
   isModelConfigLoading?: boolean;
@@ -47,8 +45,10 @@ export function SummaryGeneratorButtonGroup({
   customPrompt,
   summaryStatus,
   availableTemplates,
-  selectedTemplate,
+  meetingTemplateOverrideId,
+  globalDefaultName,
   onTemplateSelect,
+  isTemplateSelectionPending,
   hasTranscripts = true,
   hasSummary = false,
   isModelConfigLoading = false,
@@ -106,14 +106,16 @@ export function SummaryGeneratorButtonGroup({
             Analytics.trackButtonClick('generate_summary', 'meeting_details');
             void onGenerateSummary(customPrompt);
           }}
-          disabled={isModelConfigLoading}
+          disabled={isModelConfigLoading || isTemplateSelectionPending}
           title={
             isModelConfigLoading
               ? 'Loading model configuration...'
+              : isTemplateSelectionPending
+                ? 'Saving template selection...'
               : hasSummary ? 'Regenerate AI Summary' : 'Generate AI Summary'
           }
         >
-          {isModelConfigLoading ? (
+          {isModelConfigLoading || isTemplateSelectionPending ? (
             <>
               <Loader2 className="animate-spin" size={18} />
               <span className="hidden @[24rem]:inline">Processing...</span>
@@ -160,37 +162,13 @@ export function SummaryGeneratorButtonGroup({
         </DialogContent>
       </Dialog>
 
-      {/* Template selector dropdown */}
-      {availableTemplates.length > 0 && (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="outline"
-              size="sm"
-              title="Select summary template"
-            >
-              <FileText />
-              <span className="hidden @[40rem]:inline">Template</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            {availableTemplates.map((template) => (
-              <DropdownMenuItem
-                key={template.id}
-                onClick={() => onTemplateSelect(template.id, template.name)}
-                title={template.description}
-                className="flex items-center justify-between gap-2"
-              >
-                <span>{template.name}</span>
-                {selectedTemplate === template.id && (
-                  <Check className="h-4 w-4 text-green-600" />
-                )}
-              </DropdownMenuItem>
-            ))}
-
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
+      <MeetingTemplateSelector
+        templates={availableTemplates}
+        meetingOverrideId={meetingTemplateOverrideId}
+        globalDefaultName={globalDefaultName}
+        onSelect={onTemplateSelect}
+        disabled={isTemplateSelectionPending}
+      />
     </ButtonGroup>
   );
 }

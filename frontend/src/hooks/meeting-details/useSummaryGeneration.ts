@@ -75,7 +75,7 @@ interface UseSummaryGenerationProps {
   modelConfig: ModelConfig;
   isModelConfigLoading: boolean;
   selectedTemplate: string;
-  customPrompt: string;
+  customPrompt?: string;
   onMeetingUpdated?: () => Promise<void>;
   updateMeetingTitle: (title: string) => void;
   setAiSummary: (summary: MeetingSummary | null) => void;
@@ -89,7 +89,7 @@ export function useSummaryGeneration({
   modelConfig,
   isModelConfigLoading,
   selectedTemplate,
-  customPrompt,
+  customPrompt = '',
   onMeetingUpdated,
   updateMeetingTitle,
   setAiSummary,
@@ -374,6 +374,11 @@ export function useSummaryGeneration({
         templateId: selectedTemplate,
         summaryLanguage,
       });
+      if (result.template_notice) {
+        toast.info('Template settings recovered', {
+          description: result.template_notice,
+        });
+      }
       const processId = result.process_id;
       if (!mountedRef.current || visibleMeetingIdRef.current !== meeting.id) return;
       if (generationId !== generationIdRef.current) {

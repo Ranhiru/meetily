@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
-import { ArrowLeft, Settings2, Mic, Database as DatabaseIcon, SparkleIcon, FlaskConical } from 'lucide-react';
+import { ArrowLeft, Settings2, Mic, Database as DatabaseIcon, SparkleIcon, FlaskConical, LayoutTemplate } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { invoke } from '@tauri-apps/api/core';
 import { motion } from 'framer-motion';
@@ -12,6 +12,7 @@ import { SummaryModelSettings } from '@/components/SummaryModelSettings';
 import { BetaSettings } from '@/components/BetaSettings';
 import { useConfig } from '@/contexts/ConfigContext';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { TemplateSettings, TemplateSettingsHandle } from '@/components/TemplateSettings';
 
 // Tabs configuration (constant)
 const TABS = [
@@ -19,6 +20,7 @@ const TABS = [
   { value: 'recording', label: 'Recordings', icon: Mic },
   { value: 'Transcriptionmodels', label: 'Transcription', icon: DatabaseIcon },
   { value: 'summaryModels', label: 'Summary', icon: SparkleIcon },
+  { value: 'templates', label: 'Templates', icon: LayoutTemplate },
   { value: 'beta', label: 'Beta', icon: FlaskConical }
 ] as const;
 
@@ -30,6 +32,20 @@ export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('general');
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const [underlineStyle, setUnderlineStyle] = useState({ left: 0, width: 0 });
+  const templateSettingsRef = useRef<TemplateSettingsHandle>(null);
+
+  const canLeaveTemplates = async () => {
+    if (activeTab !== 'templates') return true;
+    return templateSettingsRef.current?.confirmNavigation() ?? true;
+  };
+
+  const handleTabChange = async (nextTab: string) => {
+    if (await canLeaveTemplates()) setActiveTab(nextTab);
+  };
+
+  const handleBack = async () => {
+    if (await canLeaveTemplates()) router.back();
+  };
 
   // Load saved transcript configuration on mount
   useEffect(() => {
@@ -69,7 +85,7 @@ export default function SettingsPage() {
         <div className="max-w-6xl mx-auto px-8 py-6">
           <div className="flex items-center gap-4">
             <button
-              onClick={() => router.back()}
+              onClick={() => void handleBack()}
               className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -84,7 +100,7 @@ export default function SettingsPage() {
       <div className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto p-8 pt-6">
           {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <Tabs value={activeTab} onValueChange={(value) => void handleTabChange(value)}>
             <TabsList className="bg-transparent relative rounded-none border-b border-gray-200 p-0 h-auto">
               {TABS.map((tab, index) => {
                 const Icon = tab.icon;
@@ -123,6 +139,9 @@ export default function SettingsPage() {
             </TabsContent>
             <TabsContent value="summaryModels">
               <SummaryModelSettings />
+            </TabsContent>
+            <TabsContent value="templates">
+              <TemplateSettings ref={templateSettingsRef} />
             </TabsContent>
             <TabsContent value="beta" className="mt-6">
               <BetaSettings />

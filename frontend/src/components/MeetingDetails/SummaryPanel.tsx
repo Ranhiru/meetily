@@ -21,6 +21,7 @@ import {
   SummaryLanguageStorage,
 } from '@/lib/summary-language-preferences';
 import { hasVisibleSummaryContent } from '@/lib/summary-content';
+import type { TemplateDescriptor } from '@/types/templates';
 
 interface SummaryPanelProps {
   meeting: {
@@ -49,9 +50,11 @@ interface SummaryPanelProps {
   summaryError: string | null;
   onRegenerateSummary: () => Promise<void>;
   getSummaryStatusMessage: (status: 'idle' | 'processing' | 'summarizing' | 'regenerating' | 'completed' | 'error') => string;
-  availableTemplates: Array<{ id: string, name: string, description: string }>;
-  selectedTemplate: string;
-  onTemplateSelect: (templateId: string, templateName: string) => void;
+  availableTemplates: TemplateDescriptor[];
+  meetingTemplateOverrideId: string | null;
+  globalDefaultName: string;
+  onTemplateSelect: (templateId: string | null, templateName: string) => Promise<void>;
+  isTemplateSelectionPending: boolean;
   isModelConfigLoading?: boolean;
   onOpenModelSettings?: (openFn: () => void) => void;
 }
@@ -80,8 +83,10 @@ export function SummaryPanel({
   onRegenerateSummary,
   getSummaryStatusMessage,
   availableTemplates,
-  selectedTemplate,
+  meetingTemplateOverrideId,
+  globalDefaultName,
   onTemplateSelect,
+  isTemplateSelectionPending,
   isModelConfigLoading = false,
   onOpenModelSettings,
 }: SummaryPanelProps) {
@@ -256,8 +261,10 @@ export function SummaryPanel({
               customPrompt={customPrompt}
               summaryStatus={summaryStatus}
               availableTemplates={availableTemplates}
-              selectedTemplate={selectedTemplate}
+              meetingTemplateOverrideId={meetingTemplateOverrideId}
+              globalDefaultName={globalDefaultName}
               onTemplateSelect={onTemplateSelect}
+              isTemplateSelectionPending={isTemplateSelectionPending}
               hasTranscripts={transcripts.length > 0}
               hasSummary={hasSummary}
               isModelConfigLoading={isModelConfigLoading}
@@ -290,7 +297,7 @@ export function SummaryPanel({
         <EmptyStateSummary
           onGenerate={() => onGenerateSummary(customPrompt)}
           hasModel={modelConfig.provider !== null && modelConfig.model !== null}
-          isGenerating={isSummaryLoading}
+          isGenerating={isSummaryLoading || isTemplateSelectionPending}
           error={summaryError}
         />
       ) : (

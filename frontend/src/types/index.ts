@@ -101,6 +101,7 @@ export type SummaryProcessStatus =
 export interface ProcessTranscriptResponse {
   message: string;
   process_id: string;
+  template_notice?: string | null;
 }
 
 export interface CancelSummaryResponse {

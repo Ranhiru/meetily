@@ -407,3 +407,17 @@ $env:RUST_LOG="debug"; ./clean_run_windows.bat
 
 **Whisper Integration**:
 - [frontend/src-tauri/src/whisper_engine/whisper_engine.rs](frontend/src-tauri/src/whisper_engine/whisper_engine.rs) - Whisper model management and transcription
+
+## Agent skills
+
+### Issue tracker
+
+Issues and specs are tracked as local Markdown under `.scratch/`. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Triage uses the five canonical label names. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Domain documentation uses the single-context layout. See `docs/agents/domain.md`.
