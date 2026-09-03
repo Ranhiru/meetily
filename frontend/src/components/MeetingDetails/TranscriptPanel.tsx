@@ -204,6 +204,27 @@ export function TranscriptPanel({
     return findSegmentIdAt(locatableSegments, player.currentTime);
   }, [isAudioAvailable, locatableSegments, player.currentTime]);
 
+  // Long meetings are loaded in pages. Keep extending the loaded time range as playback
+  // reaches it so follow mode can locate the next segment instead of stopping at page 1.
+  useEffect(() => {
+    if (!isFollowing || !hasMore || isLoadingMore || !onLoadMore) return;
+
+    const lastSegment = locatableSegments[locatableSegments.length - 1];
+    if (!lastSegment) return;
+
+    const loadedThrough = lastSegment.endTime ?? lastSegment.timestamp!;
+    if (player.currentTime > loadedThrough) {
+      void onLoadMore();
+    }
+  }, [
+    isFollowing,
+    hasMore,
+    isLoadingMore,
+    onLoadMore,
+    locatableSegments,
+    player.currentTime,
+  ]);
+
   const handleTogglePlayer = useCallback(() => {
     // Resolution is in flight, so we do not yet know whether this meeting has audio
     if (isResolvingAudio) return;
@@ -307,4 +328,3 @@ export function TranscriptPanel({
     </div>
   );
 }
-
