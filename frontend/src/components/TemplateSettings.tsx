@@ -413,10 +413,10 @@ export const TemplateSettings = forwardRef<TemplateSettingsHandle, TemplateSetti
                       {editable && <button type="button" onClick={() => setDraft({ ...draft, sections: [...draft.sections, emptySection()] })} className="rounded border px-2 py-1 text-sm">Add section</button>}
                     </div>
                     {draft.sections.map((section, index) => (
-                      <fieldset key={index} className="space-y-3 rounded border p-3">
+                      <fieldset key={index} className="relative space-y-3 rounded border p-3">
                         <legend className="px-1 text-sm font-medium">Section {index + 1}</legend>
                         {editable && (
-                          <div className="flex justify-end gap-1">
+                          <div className="absolute -top-3 right-3 flex gap-1 bg-white px-1">
                             <button type="button" aria-label={`Move section ${index + 1} up`} disabled={index === 0} onClick={() => moveSection(index, -1)} className="rounded border p-1 disabled:opacity-40"><ArrowUp size={14} /></button>
                             <button type="button" aria-label={`Move section ${index + 1} down`} disabled={index === draft.sections.length - 1} onClick={() => moveSection(index, 1)} className="rounded border p-1 disabled:opacity-40"><ArrowDown size={14} /></button>
                             <button type="button" disabled={draft.sections.length === 1} onClick={() => setDraft({ ...draft, sections: draft.sections.filter((_, sectionIndex) => sectionIndex !== index) })} className="rounded border border-red-200 px-2 py-1 text-xs text-red-700 disabled:opacity-40">Remove</button>
