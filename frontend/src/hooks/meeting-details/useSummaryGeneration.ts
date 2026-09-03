@@ -162,6 +162,11 @@ export function useSummaryGeneration({
       }) as any;
 
       const process_id = result.process_id;
+      if (result.template_notice) {
+        toast.info('Template settings recovered', {
+          description: result.template_notice,
+        });
+      }
       console.log('Process ID:', process_id);
 
       // Start global polling via context
