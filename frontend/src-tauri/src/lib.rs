@@ -34,6 +34,7 @@ macro_rules! perf_trace {
 pub mod analytics;
 pub mod api;
 pub mod audio;
+mod audio_protocol;
 pub mod config;
 pub mod console_utils;
 pub mod database;
@@ -379,6 +380,16 @@ pub fn run() {
     log::set_max_level(log::LevelFilter::Info);
 
     let mut builder = tauri::Builder::default();
+
+    builder = builder.register_asynchronous_uri_scheme_protocol(
+        "meetily-audio",
+        |context, request, responder| {
+            let app = context.app_handle().clone();
+            std::thread::spawn(move || {
+                responder.respond(audio_protocol::response(&app, request));
+            });
+        },
+    );
 
     #[cfg(any(target_os = "macos", windows, target_os = "linux"))]
     {
